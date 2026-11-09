@@ -1,0 +1,32 @@
+name: Update market prices
+
+on:
+  schedule:
+    # Weekdays at 20:41 UTC (2:41 pm Central in winter), after the CBOT grain close.
+    - cron: '41 20 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  prices:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Fetch futures prices
+        run: node scripts/update-prices.mjs
+      - name: Commit prices.json if it changed
+        run: |
+          if git diff --quiet -- prices.json && git ls-files --error-unmatch prices.json >/dev/null 2>&1; then
+            echo "No price change."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add prices.json
+          git commit -m "Update market prices"
+          git push

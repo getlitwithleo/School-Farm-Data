@@ -438,6 +438,39 @@ tr.blank-row td { color: var(--muted); }
 @media (forced-colors: active) {
   .segbar span, .ibar, .dot, .key { forced-color-adjust: none; }
 }
+
+/* Forecast + market prices */
+:root { --wx-sun: #e9a90f; }
+.wx { display: flex; flex-direction: column; gap: 12px; }
+.wx-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.wx-head h3 { font-size: 19px; font-weight: 700; }
+.wx-headline { font-size: 17px; font-weight: 600; margin-top: 4px; }
+.wx-sub { color: var(--muted); font-size: 14px; margin-top: 2px; }
+.wx-days { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+.wx-day { border: 1px solid var(--line); border-radius: 8px; padding: 10px 6px; display: flex; flex-direction: column; align-items: center; gap: 3px; text-align: center; background: var(--surface); min-width: 0; }
+.wx-day.wet { background: color-mix(in srgb, var(--rain) 9%, var(--surface)); border-color: color-mix(in srgb, var(--rain) 45%, var(--line)); }
+.wx-name { font-weight: 700; font-size: 14px; }
+.wx-i { width: 44px; height: 44px; }
+.wx-i .sun { fill: var(--wx-sun); }
+.wx-i .ray { stroke: var(--wx-sun); stroke-width: 2.4; stroke-linecap: round; }
+.wx-i .cl { fill: color-mix(in srgb, var(--muted) 35%, var(--surface)); stroke: color-mix(in srgb, var(--muted) 75%, var(--surface)); stroke-width: 1.5; }
+.wx-i .rd { stroke: var(--rain); stroke-width: 2.6; stroke-linecap: round; }
+.wx-i .bolt { fill: var(--wx-sun); }
+.wx-i .sn { fill: var(--rain); }
+.wx-i .fg { stroke: color-mix(in srgb, var(--muted) 75%, var(--surface)); stroke-width: 2.6; stroke-linecap: round; }
+.wx-label { font-size: 13px; color: var(--ink-2); line-height: 1.25; min-height: 2.5em; display: flex; align-items: center; }
+.wx-temp { font-weight: 700; font-variant-numeric: tabular-nums; }
+.wx-temp span { color: var(--muted); font-weight: 500; }
+.wx-pop { font-size: 13px; color: var(--ink-2); display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+.wx-pop svg { width: 9px; height: 11px; fill: var(--rain); }
+.wx-foot { font-size: 13px; color: var(--muted); }
+.linkish { background: none; border: 0; padding: 0; font: inherit; color: var(--green-text); text-decoration: underline; cursor: pointer; }
+.price-src { font-size: 12.5px; color: var(--muted); font-family: var(--font-body); white-space: nowrap; margin-top: 2px; }
+@media (max-width: 900px) {
+  .wx-days { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; }
+  .wx-day { flex: 0 0 100px; scroll-snap-align: start; }
+}
+
 /* ---- School Farm look: emblem blue + corn gold, record-book styling ---- */
 :root {
   --blue: #1b4f8f; --blue-deep: #12355f; --gold: #f2b705; --gold-ink: #5a4300;
@@ -843,7 +876,7 @@ function normalize(d) {
   const defs = defaultCrops();
   const crops = Array.isArray(d.crops) && d.crops.length ? d.crops : defs;
   out.crops = crops.map(c => ({ id: String(c.id || uid('c')), name: String(c.name || 'Crop'), unit: UNITS.includes(c.unit) ? c.unit : 'bu/ac',
-    price: num(c.price) ?? 0, expectedYield: num(c.expectedYield) ?? 0, seasonDays: num(c.seasonDays) ?? 120,
+    price: num(c.price) ?? 0, basis: num(c.basis) ?? 0, autoPrice: c.autoPrice !== false, expectedYield: num(c.expectedYield) ?? 0, seasonDays: num(c.seasonDays) ?? 120,
     slot: num(c.slot), builtin: !!c.builtin, stages: Array.isArray(c.stages) ? c.stages.filter(s => s && s.code).map(s => ({ code: String(s.code), name: String(s.name || s.code), days: num(s.days) ?? 0 })) : [] }));
   for (const c of defs) if (!out.crops.some(x => x.id === c.id)) out.crops.push(c);
   out.fields = (d.fields || []).map(f => ({ id: String(f.id || uid('f')), name: String(f.name || 'Field'), acres: num(f.acres) ?? 0, soil: String(f.soil || ''), location: String(f.location || ''), irrigated: !!f.irrigated }));
@@ -1113,7 +1146,7 @@ function viewDashboard() {
   byCrop.sort((a, b) => S.crops.indexOf(a.crop) - S.crops.indexOf(b.crop));
   const tile = (label, value, sub, cls = '') => `<div class="tile ${cls}"><div class="tile-label">${label}</div>${value}${sub ? `<div class="tile-sub">${sub}</div>` : ''}</div>`;
   const netCls = net >= 0 ? 'pos' : 'neg';
-  let html = `<section class="tiles" aria-label="Season summary">
+  let html = forecastCard() + `<section class="tiles" aria-label="Season summary">
     ${tile('Total acres', `<div class="tile-value">${nf(acres)}<span class="unit">ac</span></div>`, `${E.length} field${E.length === 1 ? '' : 's'} planted · ${nf(irr)} ac irrigated`)}
     ${tile('Total costs', `<div class="tile-value">${moneyC(totalCost)}</div>`, `${money(vAc ? totalCost / vAc : 0)}/ac · ${F.inputs.length} input entries`)}
     ${tile('Projected revenue', `<div class="tile-value">${moneyC(revenue)}</div>`, `${money(acres ? revenue / acres : 0)}/ac · ${nHarv} of ${E.length} harvested${nHarv < E.length ? ', rest at expected yield' : ''}`)}
@@ -1250,11 +1283,11 @@ function viewFields() {
   let html = `<div class="toolbar"><div><h2>Fields</h2><p>${list.length} of ${S.fields.length} fields · ${nf(totalAc)} ac · ${y} season</p></div>
     <div class="toolbar-actions"><button type="button" class="btn btn-primary" data-act="add-field">+ Add field</button></div></div>`;
   html += list.length ? `<div class="field-grid">${list.map(f => fieldCard(f, y)).join('')}</div>` : `<div class="card"><p class="muted">${S.fields.length ? 'No fields match these filters.' : 'No fields yet. Add your first field to get started.'}</p></div>`;
-  html += `<section class="card"><div class="card-head"><div><h3>Crops &amp; default prices</h3><p class="sub">Defaults used when a field's season doesn't set its own expected yield or price</p></div>
+  html += `<section class="card"><div class="card-head"><div><h3>Crops &amp; sell prices</h3><p class="sub">Used when a field's season doesn't set its own expected yield or sale price</p></div>
     <button type="button" class="btn" data-act="add-crop">+ Add custom crop</button></div>
-    <div class="table-wrap"><table class="rtable"><thead><tr><th>Crop</th><th>Unit</th><th class="num">Default price</th><th class="num">Expected yield</th><th class="num">Days to harvest</th><th>Growth stages</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>
+    ${marketNote()}<div class="table-wrap"><table class="rtable"><thead><tr><th>Crop</th><th>Unit</th><th class="num">Sell price</th><th class="num">Expected yield</th><th class="num">Days to harvest</th><th>Growth stages</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>
     ${S.crops.map(c => `<tr><td class="rt-title" data-label="Crop"><span class="crop-name"><i class="dot" style="--c:${cropVar(c)}"></i>${esc(c.name)}</span>${c.builtin ? '' : ' <span class="chip">Custom</span>'}</td>
-      <td data-label="Unit">${esc(c.unit)}</td><td class="num" data-label="Default price">${fmtPrice(c.price, c.unit)}</td><td class="num" data-label="Expected yield">${fmtYield(c.expectedYield)} ${esc(c.unit)}</td>
+      <td data-label="Unit">${esc(c.unit)}</td><td class="num" data-label="Sell price">${fmtPrice(c.price, c.unit)}${priceSource(c)}</td><td class="num" data-label="Expected yield">${fmtYield(c.expectedYield)} ${esc(c.unit)}</td>
       <td class="num" data-label="Days to harvest">${nf(c.seasonDays)} days</td><td data-label="Growth stages"><span class="small muted">${esc(c.stages.map(s => s.code).join(' · ') || '—')}</span></td>
       <td class="actions"><button type="button" class="icon-btn" data-act="edit-crop" data-id="${esc(c.id)}" aria-label="Edit ${esc(c.name)}">${ICON.edit}</button>${c.builtin ? '' : `<button type="button" class="icon-btn danger" data-act="del-crop" data-id="${esc(c.id)}" aria-label="Delete ${esc(c.name)}">${ICON.del}</button>`}</td></tr>`).join('')}
     </tbody></table></div></section>`;
@@ -1398,7 +1431,7 @@ function viewYield() {
     </tbody><tfoot><tr><td class="rt-title" data-label="">Total</td><td data-label=""></td><td class="num" data-label="Acres">${nf(acres)}</td><td data-label=""></td><td data-label=""></td><td data-label=""></td><td data-label=""></td>
       <td class="num" data-label="Gross revenue">${money(rev)}</td><td class="num" data-label="Total cost">${money(cost)}</td><td class="num" data-label="Cost/ac">${money(acres ? cost / acres : 0)}</td>
       <td class="num" data-label="Net profit"><span class="${net >= 0 ? 'pos' : 'neg'}">${money(net)}</span></td><td class="num" data-label="Profit/ac"><span class="${net >= 0 ? 'pos' : 'neg'}">${signedMoney(acres ? net / acres : 0)}</span></td><td data-label=""></td><td data-label=""></td><td data-label=""></td></tr></tfoot></table></div>` : '<p class="muted">No planted fields for this selection.</p>'}
-    <p class="chart-note">Break-even price = total cost ÷ (yield × acres). Break-even yield = total cost ÷ (price × acres). Costs include every input logged for the field and season, land rent included.</p>
+    <p class="chart-note">Break-even price = total cost ÷ (yield × acres). Break-even yield = total cost ÷ (price × acres). Costs include every input logged for the field and season, land rent included.${MARKET_STATE === 'on' ? ` Fields without a sale price use today's sell price (futures + basis, updated ${fmtDate(String(MARKET.asOf).slice(0, 10), true)}). Enter the sale price when you record a harvest to lock in what you were paid.` : ''}</p>
   </section>`;
 }
 
@@ -1627,26 +1660,37 @@ function openCropModal(id, after) {
   const c = id ? cropById(id) : null;
   const d = c || { name: '', unit: 'bu/ac', price: '', expectedYield: '', seasonDays: 120, stages: stg('EM:Emergence:10, MID:Mid-season:60, MAT:Maturity:105'), builtin: false };
   const lock = c && c.builtin ? ' disabled' : '';
+  const mk = !!(c && MARKET_MAP[c.id]), q = c ? marketQuote(c) : null, auto0 = mk && c.autoPrice !== false;
   openModal({ title: c ? `Edit ${c.name}` : 'Add custom crop', submitLabel: c ? 'Save crop' : 'Add crop',
     body: `<div class="form-grid">
       <div class="fld span-2"><label for="cName">Crop name</label><input id="cName" type="text" value="${esc(d.name)}" placeholder="e.g. Sunflowers"${lock} autocomplete="off">${c && c.builtin ? '<span class="hint">Built-in crops keep their name and unit.</span>' : ''}</div>
       <div class="fld"><label for="cUnit">Yield unit</label><select id="cUnit"${lock}>${UNITS.map(u => `<option${u === d.unit ? ' selected' : ''}>${u}</option>`).join('')}</select></div>
-      <div class="fld"><label for="cPrice">Default price</label>${unitField('cPrice', d.price, '$/' + unitPer(d.unit))}</div>
+      <div class="fld"><label for="cPrice">Sell price</label>${unitField('cPrice', d.price, '$/' + unitPer(d.unit), auto0 ? 'disabled' : '')}<span class="hint" id="cPriceHint"></span></div>
+      ${mk ? `<div class="fld span-2"><span class="lbl" id="cAutoLbl">Sell price updates</span><div class="choice" role="radiogroup" aria-labelledby="cAutoLbl"><label><input type="radio" name="cAuto" value="auto"${auto0 ? ' checked' : ''}><span>Follow the futures market</span></label><label><input type="radio" name="cAuto" value="manual"${auto0 ? '' : ' checked'}><span>Set by hand</span></label></div></div>
+      <div class="fld"><label for="cBasis">Basis</label><div class="input-unit"><input id="cBasis" type="number" inputmode="decimal" step="0.01" value="${esc(num(d.basis) ?? 0)}"><span>$/${unitPer(d.unit)}</span></div><span class="hint">Your elevator's cash bid minus futures. Usually negative, like −0.45.</span></div>` : ''}
       <div class="fld"><label for="cExp">Expected yield</label>${unitField('cExp', d.expectedYield, d.unit)}</div>
       <div class="fld"><label for="cDays">Days, planting to harvest</label>${unitField('cDays', d.seasonDays, 'days')}</div>
       <div class="fld span-2"><label for="cStages">Growth stages</label><textarea id="cStages" rows="3">${esc(stagesToText(d.stages))}</textarea><span class="hint">Code:Name:days after planting, separated by commas. Example: VE:Emergence:8, R1:Bloom:60</span></div>
     </div>`,
-    onOpen: () => { $('#cUnit').addEventListener('change', () => { const u = $('#cUnit').value; $('#cPriceU').textContent = '$/' + unitPer(u); $('#cExpU').textContent = u; }); },
+    onOpen: () => {
+      $('#cUnit').addEventListener('change', () => { const u = $('#cUnit').value; $('#cPriceU').textContent = '$/' + unitPer(u); $('#cExpU').textContent = u; });
+      if (!mk) return;
+      const upd = () => { const a = radio('cAuto') === 'auto', b = num(val('cBasis')) || 0; $('#cPrice').disabled = a;
+        if (a && q) { $('#cPrice').value = roundPrice(q.price + b, c.unit); $('#cPriceHint').textContent = `${q.label} futures${q.contract ? ' (' + q.contract + ')' : ''} ${fmtPrice(q.price, c.unit)} ${b < 0 ? '−' : '+'} ${money(Math.abs(b), 2)} basis`; }
+        else $('#cPriceHint').textContent = a ? 'Updates when the live site loads today\'s futures prices.' : ''; };
+      $$('input[name="cAuto"]').forEach(r => r.addEventListener('change', upd)); $('#cBasis').addEventListener('input', upd); upd();
+    },
     onSubmit: () => {
       const name = c && c.builtin ? c.name : val('cName');
       if (!name) return 'Enter a crop name.';
       if (S.crops.some(x => x.name.toLowerCase() === name.toLowerCase() && x.id !== id)) return `There's already a crop named ${name}.`;
       const price = num(val('cPrice')), exp = num(val('cExp')), days = num(val('cDays'));
-      if (price == null || price < 0) return 'Enter a default price (0 or more).';
+      if ((price == null || price < 0) && !(mk && radio('cAuto') === 'auto')) return 'Enter a sell price (0 or more).';
       if (exp == null || exp < 0) return 'Enter an expected yield (0 or more).';
       if (days == null || days < 1) return 'Enter the days from planting to harvest.';
       const stages = stg(val('cStages'));
-      const data = { price, expectedYield: exp, seasonDays: Math.round(days), stages };
+      const data = { price: price ?? (c ? c.price : 0), expectedYield: exp, seasonDays: Math.round(days), stages };
+      if (mk) { data.autoPrice = radio('cAuto') === 'auto'; data.basis = num(val('cBasis')) || 0; if (data.autoPrice && q) data.price = roundPrice(q.price + data.basis, c.unit); }
       let cid = id;
       if (c) { Object.assign(c, data); if (!c.builtin) { c.name = name; c.unit = val('cUnit'); } }
       else { cid = 'c_' + name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 24) + '_' + Math.random().toString(36).slice(2, 5); S.crops.push(Object.assign({ id: cid, name, unit: val('cUnit'), slot: null, builtin: false }, data)); }
@@ -1932,6 +1976,9 @@ function importText(text) {
 function openDataModal() {
   openModal({ title: 'Data & export', noSubmit: true, wide: true,
     body: `<div class="data-sec"><h3>Farm name</h3><div style="display:flex;gap:8px"><label class="sr-only" for="dFarm">Farm name</label><input id="dFarm" type="text" value="${esc(S.settings.farmName)}" autocomplete="off"><button type="button" class="btn" data-act="save-farm">Save</button></div></div>
+      <div class="data-sec"><h3>Forecast location</h3><p class="small muted">The dashboard forecast is for ${esc((WX && WX.place) || wxLoc().name || 'the farm')} (${wxLoc().lat}, ${wxLoc().lon}). Enter the farm's latitude and longitude, or use this device's location while you're standing at the farm.</p>
+        <div class="form-grid"><div class="fld"><label for="wxLat">Latitude</label><input id="wxLat" type="number" inputmode="decimal" step="any" value="${wxLoc().lat}"></div><div class="fld"><label for="wxLon">Longitude</label><input id="wxLon" type="number" inputmode="decimal" step="any" value="${wxLoc().lon}"></div></div>
+        <div class="btn-row"><button type="button" class="btn" data-act="save-wx-loc">Save location</button><button type="button" class="btn btn-ghost" data-act="wx-geo">Use this device's location</button></div><p id="wxMsg" class="small" role="status"></p></div>
       <div class="data-sec"><h3>Export</h3><p class="small muted">JSON is a full backup you can import later. CSV files open in Excel or Google Sheets.</p>
         <div class="btn-row"><button type="button" class="btn btn-primary" data-act="export" data-id="json">Download JSON backup</button></div>
         <div class="btn-row">${['inputs', 'plantings', 'profit', 'trials', 'scouting', 'rainfall'].map(k => `<button type="button" class="btn sm" data-act="export" data-id="${k}">${EXPORTS[k].label} CSV</button>`).join('')}</div>
@@ -2286,6 +2333,154 @@ function openTrialImportModal(preset = {}) {
     } });
 }
 
+
+/* ================= Market prices (prices.json, refreshed each weekday by a GitHub Action) ================= */
+const MARKET_MAP = { corn: 'corn', soybeans: 'soybeans', 'wheat-winter': 'wheat', sorghum: 'corn', oats: 'oats', cotton: 'cotton' };
+let MARKET = null, MARKET_STATE = /^https?:/.test(location.protocol) ? 'loading' : 'off';
+const roundPrice = (v, unit) => unit === 'lb/ac' ? Math.round(v * 1000) / 1000 : Math.round(v * 100) / 100;
+const marketQuote = c => { const k = c && MARKET_MAP[c.id]; return k && MARKET && MARKET.quotes ? MARKET.quotes[k] || null : null; };
+function softRender() { if (!$('#modalRoot').classList.contains('open')) render(); }
+function applyMarket() {
+  let changed = false;
+  for (const c of S.crops) {
+    const q = marketQuote(c);
+    if (!q || c.autoPrice === false || !isFinite(q.price)) continue;
+    const price = roundPrice(q.price + (num(c.basis) || 0), c.unit);
+    if (c.price !== price) { c.price = price; changed = true; }
+  }
+  return changed;
+}
+async function loadMarket() {
+  if (!/^https?:/.test(location.protocol)) return;
+  try {
+    const r = await fetch('prices.json?t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    if (!d || !d.quotes) throw new Error('no quotes');
+    MARKET = d; MARKET_STATE = 'on';
+    if (applyMarket()) save();
+  } catch (e) { MARKET_STATE = 'stale'; }
+  softRender();
+}
+function marketNote() {
+  if (MARKET_STATE === 'off') return '<p class="auto-note">Sell prices update automatically from the futures market on the live site. Here they are set by hand.</p>';
+  if (MARKET_STATE === 'loading') return '<p class="auto-note">Checking today\'s market prices…</p>';
+  if (MARKET_STATE === 'stale') return '<p class="auto-note">Today\'s market prices couldn\'t be loaded, so the last saved prices are used.</p>';
+  const auto = S.crops.filter(c => marketQuote(c) && c.autoPrice !== false);
+  const noBasis = auto.filter(c => !num(c.basis)).map(c => c.name);
+  return `<p class="auto-note">Sell prices follow the futures market and update each weekday after the close (last update ${fmtDate(String(MARKET.asOf).slice(0, 10), true)}). Sell price = futures + your elevator's basis.${noBasis.length ? ` No basis is set yet for ${esc(noBasis.join(', '))}, so those prices equal futures. Tap the edit button on a crop to add its basis.` : ''}</p>`;
+}
+function priceSource(c) {
+  const q = marketQuote(c);
+  if (!MARKET_MAP[c.id] || c.autoPrice === false) return '<div class="price-src">Set by hand</div>';
+  if (!q) return '<div class="price-src">Follows futures</div>';
+  const b = num(c.basis) || 0;
+  return `<div class="price-src">${esc(q.label)} futures ${fmtPrice(q.price, c.unit)}${b ? ` ${b < 0 ? '−' : '+'} ${money(Math.abs(b), c.unit === 'lb/ac' ? 3 : 2)} basis` : ', no basis'}</div>`;
+}
+
+/* ================= Forecast (National Weather Service, refreshed every hour) ================= */
+const WX_KEY = 'farmFieldTracker.wx.v1';
+const DEFAULT_WX_LOC = { lat: 43.0411, lon: -88.2371, name: 'Waukesha County Airport' };
+let WX = null, WX_STATE = /^https?:/.test(location.protocol) ? 'loading' : 'off';
+const wxLoc = () => { const l = S.settings.wxLoc; return l && isFinite(l.lat) && isFinite(l.lon) ? l : DEFAULT_WX_LOC; };
+const wxKeyOf = l => `${Number(l.lat).toFixed(4)},${Number(l.lon).toFixed(4)}`;
+const popOf = p => (p && p.probabilityOfPrecipitation && p.probabilityOfPrecipitation.value) || 0;
+function wxCacheLoad() { try { const c = JSON.parse(localStorage.getItem(WX_KEY) || 'null'); if (c && Array.isArray(c.days) && c.key === wxKeyOf(wxLoc())) WX = c; } catch (e) { /* no cache */ } }
+async function getJSON(url) {
+  for (let i = 0; i < 2; i++) { try { const r = await fetch(url); if (r.ok) return await r.json(); } catch (e) { /* retry once */ } }
+  throw new Error('request failed');
+}
+function buildDays(periods) {
+  const days = [];
+  for (let i = 0; i < periods.length && days.length < 7; i++) {
+    const p = periods[i], n = periods[i + 1];
+    if (p.isDaytime) {
+      const night = n && !n.isDaytime ? n : null;
+      days.push({ date: p.startTime.slice(0, 10), name: p.name, hi: p.temperature, lo: night ? night.temperature : null, pop: Math.max(popOf(p), night ? popOf(night) : 0),
+        text: p.shortForecast, detail: p.detailedForecast, wind: `${p.windDirection || ''} ${p.windSpeed || ''}`.trim() });
+      if (night) i++;
+    } else if (i === 0) {
+      days.push({ date: p.startTime.slice(0, 10), name: p.name, tonight: true, hi: null, lo: p.temperature, pop: popOf(p), text: p.shortForecast, detail: p.detailedForecast, wind: `${p.windDirection || ''} ${p.windSpeed || ''}`.trim() });
+    }
+  }
+  return days;
+}
+async function loadForecast(force) {
+  if (!/^https?:/.test(location.protocol)) { WX_STATE = 'off'; return; }
+  const loc = wxLoc(), key = wxKeyOf(loc);
+  if (!force && WX && WX.key === key && Date.now() - WX.fetched < 30 * 60000) { WX_STATE = 'on'; return; }
+  if (!WX || WX.key !== key) { WX = null; WX_STATE = 'loading'; softRender(); }
+  try {
+    let url = WX && WX.key === key ? WX.forecastUrl : null, place = WX && WX.key === key ? WX.place : null;
+    if (!url) {
+      const pt = await getJSON(`https://api.weather.gov/points/${key}`);
+      url = pt.properties.forecast;
+      const rl = pt.properties.relativeLocation && pt.properties.relativeLocation.properties;
+      place = rl ? `${rl.city}, ${rl.state}` : loc.name;
+    }
+    const fc = await getJSON(url);
+    WX = { key, forecastUrl: url, place, fetched: Date.now(), updated: fc.properties.updateTime || fc.properties.updated || new Date().toISOString(), days: buildDays(fc.properties.periods || []) };
+    try { localStorage.setItem(WX_KEY, JSON.stringify(WX)); } catch (e) { /* convenience only */ }
+    WX_STATE = 'on';
+  } catch (e) { WX_STATE = WX ? 'on' : 'stale'; if (WX) WX.failed = Date.now(); }
+  softRender();
+}
+function wxKind(text) {
+  const t = String(text || '').toLowerCase();
+  if (/thunder|t-storm/.test(t)) return 'storm';
+  if (/snow|flurr|sleet|freezing|ice/.test(t)) return 'snow';
+  if (/rain|shower|drizzle/.test(t)) return 'rain';
+  if (/fog|haze|smoke/.test(t)) return 'fog';
+  if (/partly|mostly sunny|mostly clear/.test(t)) return 'partly';
+  if (/cloud|overcast/.test(t)) return 'cloud';
+  if (/sunny|clear|fair/.test(t)) return 'sun';
+  return 'cloud';
+}
+function wxLabel(d) {
+  const k = wxKind(d.text);
+  if (d.pop >= 60) return k === 'snow' ? 'Snow likely' : k === 'storm' ? 'Storms likely' : 'Rain likely';
+  if (d.pop >= 30) return k === 'snow' ? 'Chance of snow' : k === 'storm' ? 'Chance of storms' : 'Chance of rain';
+  return { sun: d.tonight ? 'Clear' : 'Sunny', partly: d.tonight ? 'Partly clear' : 'Partly sunny', cloud: 'Cloudy', fog: 'Foggy', rain: 'Slight chance of rain', snow: 'Flurries possible', storm: 'Slight chance of storms' }[k];
+}
+function wxIcon(d) {
+  let k = wxKind(d.text); if (d.pop >= 30 && !['snow', 'storm'].includes(k)) k = 'rain';
+  const cloud = '<path class="cl" d="M15 36a7.5 7.5 0 0 1-.6-15A10.5 10.5 0 0 1 34.6 18 9 9 0 0 1 34 36z"/>';
+  const sun = (cx, cy, r) => `<circle class="sun" cx="${cx}" cy="${cy}" r="${r}"/>` + [0, 45, 90, 135, 180, 225, 270, 315].map(a => { const t = a * Math.PI / 180; return `<line class="ray" x1="${(cx + Math.cos(t) * (r + 3)).toFixed(1)}" y1="${(cy + Math.sin(t) * (r + 3)).toFixed(1)}" x2="${(cx + Math.cos(t) * (r + 6.5)).toFixed(1)}" y2="${(cy + Math.sin(t) * (r + 6.5)).toFixed(1)}"/>`; }).join('');
+  const body = {
+    sun: sun(24, 24, 8),
+    partly: sun(17, 17, 6) + '<path class="cl" d="M18 38a6.5 6.5 0 0 1-.5-13A9 9 0 0 1 35 23a7.5 7.5 0 0 1-.5 15z"/>',
+    cloud,
+    rain: '<g transform="translate(0,-5)">' + cloud + '</g><line class="rd" x1="17" y1="36" x2="15" y2="42"/><line class="rd" x1="24" y1="36" x2="22" y2="42"/><line class="rd" x1="31" y1="36" x2="29" y2="42"/>',
+    storm: '<g transform="translate(0,-5)">' + cloud + '</g><path class="bolt" d="M25 31l-6 9h5l-2 7 8-10h-5l2-6z"/>',
+    snow: '<g transform="translate(0,-5)">' + cloud + '</g><circle class="sn" cx="17" cy="39" r="2"/><circle class="sn" cx="24" cy="42" r="2"/><circle class="sn" cx="31" cy="39" r="2"/>',
+    fog: '<line class="fg" x1="10" y1="20" x2="38" y2="20"/><line class="fg" x1="7" y1="27" x2="41" y2="27"/><line class="fg" x1="12" y1="34" x2="36" y2="34"/>',
+  }[k];
+  return `<svg class="wx-i" viewBox="0 0 48 48" aria-hidden="true">${body}</svg>`;
+}
+function wxDayName(d, i) {
+  if (d.tonight) return 'Tonight';
+  if (i === 0 && d.date === today()) return 'Today';
+  return new Date(dn(d.date) * DAY).toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
+}
+function forecastCard() {
+  if (WX_STATE === 'off' && !WX) return '';
+  const head = (inner) => `<section class="card wx" aria-label="Weather forecast">${inner}</section>`;
+  if (!WX) return head(`<div class="wx-head"><div><h3>Rain or shine: 7-day forecast</h3><p class="wx-sub">${WX_STATE === 'loading' ? 'Loading the National Weather Service forecast…' : 'The forecast couldn\'t load. Check the internet connection and tap Refresh.'}</p></div>${WX_STATE === 'loading' ? '' : '<button type="button" class="btn sm" data-act="wx-refresh">Refresh</button>'}</div>`);
+  const days = WX.days, names = arr => arr.map(d => wxDayName(d, days.indexOf(d))).join(', ');
+  const wet = days.filter(d => d.pop >= 50), maybe = days.filter(d => d.pop >= 30 && d.pop < 50);
+  const good = days.filter(d => !d.tonight && d.pop < 20 && ['sun', 'partly', 'cloud'].includes(wxKind(d.text)));
+  const headline = wet.length ? `Rain likely ${names(wet)}` : maybe.length ? `Mostly dry. Some chance of rain ${names(maybe)}` : 'Dry for the next 7 days';
+  const updated = new Date(WX.updated);
+  return head(`<div class="wx-head"><div><h3>Rain or shine: 7-day forecast</h3><p class="wx-headline">${esc(headline)}</p>${good.length ? `<p class="wx-sub">Driest days for field work: ${esc(names(good.slice(0, 3)))}</p>` : ''}</div>
+      <button type="button" class="btn sm" data-act="wx-refresh">Refresh</button></div>
+    <div class="wx-days">${days.map((d, i) => { const nm = wxDayName(d, i), lab = wxLabel(d);
+      return `<div class="wx-day${d.pop >= 50 ? ' wet' : ''}" role="group" aria-label="${esc(`${nm}: ${d.text}. ${d.hi != null ? `High ${d.hi}°F. ` : ''}${d.lo != null ? `Low ${d.lo}°F. ` : ''}${d.pop}% chance of precipitation.`)}" title="${esc(d.detail || d.text)}">
+        <span class="wx-name">${esc(nm)}</span>${wxIcon(d)}<span class="wx-label">${esc(lab)}</span>
+        <span class="wx-temp">${d.hi != null ? `${d.hi}°` : ''}<span>${d.lo != null ? `${d.hi != null ? ' / ' : 'Low '}${d.lo}°` : ''}</span></span>
+        <span class="wx-pop"><svg viewBox="0 0 10 12" aria-hidden="true"><path d="M5 0C3 3.5 1 5.7 1 8a4 4 0 0 0 8 0C9 5.7 7 3.5 5 0z"/></svg>${d.pop}%</span></div>`; }).join('')}</div>
+    <p class="wx-foot">National Weather Service forecast for ${esc(WX.place || 'the farm')} · issued ${esc(updated.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' }))} · checks again every hour${WX.failed ? ' · last check failed, showing the saved forecast' : ''} · <button type="button" class="linkish" data-act="open-data">Change location</button></p>`);
+}
+
 /* ================= Actions & events ================= */
 const ACTIONS = {
   goto: id => { if (location.hash !== '#' + id) location.hash = '#' + id; else { UI.tab = id; render(); } window.scrollTo(0, 0); },
@@ -2327,6 +2522,14 @@ const ACTIONS = {
   'compare-metric': id => { UI.compareMetric = id; render(); },
   'more-inputs': () => { UI.showAllInputs = true; render(); },
   'more-rain': () => { UI.showAllRain = true; render(); },
+  'wx-refresh': () => loadForecast(true),
+  'save-wx-loc': () => { const lat = num(val('wxLat')), lon = num(val('wxLon')); const msg = $('#wxMsg');
+    if (lat == null || lon == null || lat < 17 || lat > 72 || lon < -180 || lon > -60) { msg.textContent = 'Enter a US latitude and longitude, like 43.0411 and -88.2371. The National Weather Service forecast covers US locations only.'; return; }
+    S.settings.wxLoc = { lat: Math.round(lat * 10000) / 10000, lon: Math.round(lon * 10000) / 10000, name: 'the farm' }; save(); WX = null; closeModal(); toast('Forecast location saved'); loadForecast(true); },
+  'wx-geo': () => { const msg = $('#wxMsg'); if (!navigator.geolocation) { msg.textContent = 'This device can\'t share its location. Enter the latitude and longitude instead.'; return; }
+    msg.textContent = 'Finding this device\'s location…';
+    navigator.geolocation.getCurrentPosition(pos => { $('#wxLat').value = pos.coords.latitude.toFixed(4); $('#wxLon').value = pos.coords.longitude.toFixed(4); msg.textContent = 'Location found. Tap Save location to use it.'; },
+      () => { msg.textContent = 'Couldn\'t get this device\'s location. Allow location access, or enter the latitude and longitude.'; }, { timeout: 15000 }); },
   'import-trial': () => openTrialImportModal(),
   'add-trial': () => openTrialModal(null),
   'edit-trial': id => openTrialModal(id),
@@ -2401,8 +2604,12 @@ function onHash() {
   new MutationObserver(rerender).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   let wBucket = window.innerWidth < 560, rT = null;
   window.addEventListener('resize', () => { clearTimeout(rT); rT = setTimeout(() => { const b = window.innerWidth < 560; if (b !== wBucket) { wBucket = b; rerender(); } }, 250); });
+  wxCacheLoad();
   onHash();
   save();
+  loadMarket(); loadForecast();
+  setInterval(() => loadForecast(true), 60 * 60000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { loadForecast(); loadMarket(); } });
   (async () => {
     try {
       if (!window.claude || typeof window.claude.use !== 'function') return;
