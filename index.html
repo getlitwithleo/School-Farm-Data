@@ -10,6 +10,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Bitter:wght@500;600;700;800&family=Libre+Franklin:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" async onload="window.__chartLib='ready';window.onChartLib&&window.onChartLib()" onerror="window.__chartLib='failed';window.onChartLib&&window.onChartLib()"></script>
 <style>
+/* Layout idea: dark field-green header with tabs, one sticky season/crop/field filter row,
+   summary tiles before detail cards; single column with a bottom tab bar on phones. */
 :root {
   --bg: #f5f3ec;
   --surface: #fdfcf9;
@@ -319,6 +321,22 @@ td .neg, .neg-text { color: var(--neg-text); font-weight: 700; }
 .cat-bars .track-sm i { display: block; height: 100%; background: var(--cost); border-radius: 0 4px 4px 0; }
 .cat-bars b { font-variant-numeric: tabular-nums; white-space: nowrap; }
 
+/* Trials */
+.trial-setup { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.trial-setup p { font-size: 15px; color: var(--ink-2); flex: 1 1 360px; }
+tr.check-row td { background: color-mix(in srgb, var(--exp) 12%, transparent); }
+tr.blank-row td { color: var(--muted); }
+
+.fc-trials { border-top: 1px solid var(--line); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.fc-trials-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.fc-trial-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.trial-link { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; min-height: 48px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); cursor: pointer; }
+.trial-link:hover { background: var(--surface-2); }
+.tl-name { font-weight: 700; color: var(--green-text); }
+.tl-meta { font-size: 13px; color: var(--muted); }
+.choice-list { display: flex; flex-direction: column; gap: 8px; }
+.choice-list .btn { justify-content: flex-start; white-space: normal; text-align: left; min-height: 48px; }
+
 /* Observations */
 .obs-list { display: flex; flex-direction: column; gap: 10px; }
 .obs { display: flex; gap: 12px; padding: 12px 12px 12px 14px; border: 1px solid var(--line); border-left: 5px solid var(--sevc, var(--line-strong)); border-radius: 10px; background: var(--surface); }
@@ -386,8 +404,8 @@ td .neg, .neg-text { color: var(--neg-text); font-weight: 700; }
   .quick .q-gauge { grid-column: 1 / -1; order: -1; }
   .rain-summary b { font-size: 20px; }
   .modal, .modal.wide { left: 0; right: 0; top: auto; bottom: 0; transform: none; width: 100%; max-height: 94%; border-radius: 16px 16px 0 0; }
-  .bottomnav { display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--surface); border-top: 1px solid var(--line-strong); padding-bottom: env(safe-area-inset-bottom); }
-  .bottomnav button { appearance: none; border: 0; background: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 62px; font-size: 12px; font-weight: 600; color: var(--muted); cursor: pointer; padding: 6px 2px; }
+  .bottomnav { display: grid; grid-template-columns: repeat(6, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--surface); border-top: 1px solid var(--line-strong); padding-bottom: env(safe-area-inset-bottom); }
+  .bottomnav button { appearance: none; border: 0; background: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 62px; font-size: 11px; font-weight: 600; color: var(--muted); cursor: pointer; padding: 6px 1px; }
   .bottomnav button svg { width: 24px; height: 24px; }
   .bottomnav button[aria-selected="true"] { color: var(--green-text); }
   .bottomnav button[aria-selected="true"] svg { color: var(--green); }
@@ -406,6 +424,9 @@ td .neg, .neg-text { color: var(--neg-text); font-weight: 700; }
   .rtable tfoot td { background: none; border: 0; }
   .rtable td.ibar-cell { width: 100%; }
   .kv b { font-size: 16px; }
+  .rtable tr.blank-row td:not(.rt-title):not(.keep):not(.actions) { display: none; }
+  .rtable tr.check-row { background: color-mix(in srgb, var(--exp) 12%, var(--surface)); }
+  .rtable tr.check-row td { background: none; }
 }
 @media (max-width: 400px) {
   .tiles .tile-value { font-size: 24px; }
@@ -417,7 +438,6 @@ td .neg, .neg-text { color: var(--neg-text); font-weight: 700; }
 @media (forced-colors: active) {
   .segbar span, .ibar, .dot, .key { forced-color-adjust: none; }
 }
-
 /* ---- School Farm look: emblem blue + corn gold, record-book styling ---- */
 :root {
   --blue: #1b4f8f; --blue-deep: #12355f; --gold: #f2b705; --gold-ink: #5a4300;
@@ -529,6 +549,7 @@ const TABS = [
   { id: 'inputs', label: 'Inputs', icon: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3"/>' },
   { id: 'scouting', label: 'Scouting', icon: '<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5M10.5 7.5v6M7.5 10.5h6"/>' },
   { id: 'yield', label: 'Yield & Profit', short: 'Yield', icon: '<path d="M4 20h16M7 16v-5M12 16V6M17 16v-8"/>' },
+  { id: 'trials', label: 'Hybrid Trials', short: 'Trials', icon: '<rect x="3.5" y="3" width="4" height="18" rx="1"/><rect x="10" y="3" width="4" height="18" rx="1"/><rect x="16.5" y="3" width="4" height="18" rx="1"/>' },
 ];
 const CATEGORIES = [
   { id: 'seed', label: 'Seed', units: ['seeds/ac', 'lb/ac', 'bu/ac', 'units'] },
@@ -803,10 +824,10 @@ function buildSample() {
     [2026, '2026-11-02', 'f5', 'GS9', 'other', 2, 'Grain at 19% moisture. Waiting on a hard freeze to dry down before harvest.'],
   ];
   const observations = OBS.map(([year, date, fieldId, stage, issue, severity, note]) => ({ id: uid('o'), year, date, fieldId, stage, issue, severity, note }));
-  return { version: 1, sample: true, settings: { farmName: 'School Farm' }, crops, fields, plantings, inputs, observations, rainfall };
+  return { version: 1, sample: true, settings: { farmName: 'School Farm' }, crops, fields, plantings, inputs, observations, rainfall, trials: seedTrials() };
 }
 function emptyState() {
-  return { version: 1, sample: false, settings: { farmName: 'School Farm' }, crops: defaultCrops(), fields: [], plantings: [], inputs: [], observations: [], rainfall: [] };
+  return { version: 1, sample: false, settings: { farmName: 'School Farm' }, crops: defaultCrops(), fields: [], plantings: [], inputs: [], observations: [], rainfall: [], trials: [] };
 }
 
 /* ================= Store ================= */
@@ -834,6 +855,7 @@ function normalize(d) {
     cost: num(i.cost) ?? 0, n: num(i.n), p: num(i.p), k: num(i.k), notes: String(i.notes || '') }));
   out.observations = (d.observations || []).map(o => ({ id: String(o.id || uid('o')), year: num(o.year) ?? (o.date ? +o.date.slice(0, 4) : new Date().getFullYear()), date: o.date || null,
     fieldId: String(o.fieldId), stage: String(o.stage || ''), issue: ISSUES.some(x => x.id === o.issue) ? o.issue : 'other', severity: clamp(Math.round(num(o.severity) ?? 1), 1, 5), note: String(o.note || '') }));
+  out.trials = Array.isArray(d.trials) ? d.trials.map(normTrial) : seedTrials();
   out.rainfall = (d.rainfall || []).map(r => ({ id: String(r.id || uid('r')), date: r.date || null, fieldId: String(r.fieldId || 'farm'), inches: num(r.inches) ?? 0 })).filter(r => r.date);
   return out;
 }
@@ -855,7 +877,7 @@ function loadUI() {
   let u = {};
   try { u = JSON.parse(localStorage.getItem(UI_KEY) || '{}') || {}; } catch (e) { u = {}; }
   return Object.assign({ tab: 'dashboard', year: null, crop: 'all', field: 'all', compareField: null, compareMetric: 'profit', yieldUnit: null,
-    tableView: {}, inputCat: 'all', obsIssue: 'all', bannerDismissed: false, showAllInputs: false, showAllRain: false }, u);
+    tableView: {}, trialId: null, trialSort: 'order', inputCat: 'all', obsIssue: 'all', bannerDismissed: false, showAllInputs: false, showAllRain: false }, u);
 }
 function saveUI() { try { localStorage.setItem(UI_KEY, JSON.stringify(UI)); } catch (e) { /* convenience only */ } }
 function commit() { save(); render(); }
@@ -1008,7 +1030,7 @@ function render() {
   let html = '';
   if (S.sample && !UI.bannerDismissed) html += `<div class="banner" role="status"><p>You're looking at sample data for a 548-acre farm. Edit anything, or start with an empty farm.</p><div class="btns"><button class="btn sm" data-act="start-empty">Start empty</button><button class="btn sm btn-ghost" data-act="dismiss-banner">Keep sample data</button></div></div>`;
   if (!storageOk) html += `<div class="banner warn" role="alert"><p>This browser isn't letting the page save. Your changes will be lost when you close it, so use Data &amp; export to download a JSON backup.</p></div>`;
-  const views = { dashboard: viewDashboard, fields: viewFields, inputs: viewInputs, scouting: viewScouting, yield: viewYield };
+  const views = { dashboard: viewDashboard, fields: viewFields, inputs: viewInputs, scouting: viewScouting, yield: viewYield, trials: viewTrials };
   html += (views[UI.tab] || viewDashboard)();
   v.innerHTML = html;
   mountCharts();
@@ -1249,7 +1271,7 @@ function fieldCard(f, y) {
     ${pp && plantStatus(pp).key !== 'planned' ? `<button type="button" class="btn sm" data-act="harvest" data-id="${esc(pp.id)}">${num(pp.actualYield) != null ? 'Edit harvest' : 'Record harvest'}</button>` : ''}
     <button type="button" class="btn btn-ghost sm" data-act="edit-field" data-id="${esc(f.id)}">Edit field</button>
     <button type="button" class="btn btn-ghost sm danger" data-act="del-field" data-id="${esc(f.id)}">Delete</button></div>`;
-  if (!p) return `<article class="card field-card">${head}<p class="muted">No crop assigned for the ${y} season.</p>${nextHtml}<div><div class="small muted" style="margin-bottom:6px">Rotation history</div>${rotationHtml(f.id, y)}</div>${actions(null)}</article>`;
+  if (!p) return `<article class="card field-card">${head}<p class="muted">No crop assigned for the ${y} season.</p>${nextHtml}<div><div class="small muted" style="margin-bottom:6px">Rotation history</div>${rotationHtml(f.id, y)}</div>${fieldTrialsHtml(f, y)}${actions(null)}</article>`;
   const c = cropById(p.cropId), e = econ(p), st = plantStatus(p), stages = stageInfo(p), { cur, next: nx } = currentStage(p, stages);
   const pl = dn(p.plantDate), eh = dn(p.expectedHarvest), hv = dn(p.harvestDate);
   const len = pl != null && eh != null ? Math.max(1, eh - pl) : (c.seasonDays || 1);
@@ -1272,6 +1294,7 @@ function fieldCard(f, y) {
     <div class="kv"><div><span>Costs</span><b>${money(e.costAc)}/ac</b></div><div><span>${e.harvested ? 'Yield' : 'Exp. yield'}</span><b>${fmtYield(e.yld)} ${esc(c.unit)}</b></div><div><span>${e.harvested ? 'Profit' : 'Proj. profit'}</span><b class="${e.netAc >= 0 ? 'pos' : 'neg'}">${signedMoney(e.netAc)}/ac</b></div></div>
     ${nextHtml}
     <div><div class="small muted" style="margin-bottom:6px">Rotation history</div>${rotationHtml(f.id, y)}</div>
+    ${fieldTrialsHtml(f, y)}
     ${actions(p)}</article>`;
 }
 
@@ -1409,6 +1432,11 @@ const valueLabelPlugin = { id: 'ffValueLabels', afterDatasetsDraw(chart) {
 } };
 const refLinePlugin = { id: 'ffRefLine', afterDatasetsDraw(chart) {
   const m = chartMeta.get(chart.canvas); if (!m || !m.refLine) return;
+  if (chart.options.indexAxis === 'y') {
+    const x = Math.round(chart.scales.x.getPixelForValue(m.refLine.v)) + 0.5, { top, bottom } = chart.chartArea, c = chart.ctx;
+    c.save(); c.strokeStyle = css('--ink-2'); c.lineWidth = 1; c.beginPath(); c.moveTo(x, top - 4); c.lineTo(x, bottom); c.stroke();
+    c.font = `600 11px ${css('--font-body')}`; c.fillStyle = css('--ink-2'); c.textAlign = 'center'; c.textBaseline = 'bottom'; c.fillText(m.refLine.label, x, top - 6); c.restore(); return;
+  }
   const y = Math.round(chart.scales.y.getPixelForValue(m.refLine.v)) + 0.5, { left, right } = chart.chartArea, ctx = chart.ctx;
   ctx.save(); ctx.strokeStyle = css('--ink-2'); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
   ctx.font = `600 11px ${css('--font-body')}`; ctx.fillStyle = css('--ink-2'); ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillText(m.refLine.label, right, y - 3); ctx.restore();
@@ -1469,7 +1497,7 @@ function makeBarConfig(b) {
     ticks: { color: t.muted, padding: 8, font: { size: 12 }, maxTicksLimit: 6, callback: tickCb },
     title: o.yTitle ? { display: true, text: o.yTitle, color: t.muted, font: { size: 12 } } : { display: false } };
   return { type: 'bar', data: b.data, options: { responsive: true, maintainAspectRatio: false, indexAxis: horiz ? 'y' : 'x', animation: reduceMotion() ? false : { duration: 350 },
-    layout: { padding: { top: horiz ? 4 : 22, right: horiz ? 66 : 8, bottom: hasNeg && !horiz ? 18 : 0, left: 0 } },
+    layout: { padding: { top: o.padTop ?? (horiz ? 4 : 22), right: horiz ? 66 : 8, bottom: hasNeg && !horiz ? 18 : 0, left: 0 } },
     interaction: { mode: 'index', intersect: false, axis: catAx },
     plugins: { legend: { display: false }, tooltip: { enabled: false, external: externalTooltip } }, scales } };
 }
@@ -1507,7 +1535,7 @@ function buildRainConfig(RV) {
 
 function mountCharts() {
   if (chartLib !== 'ready' || !window.Chart) return;
-  if (!pluginsRegistered) { Chart.register(crosshairPlugin, valueLabelPlugin, refLinePlugin, endLabelPlugin); pluginsRegistered = true; }
+  if (!pluginsRegistered) { Chart.register(crosshairPlugin, valueLabelPlugin, refLinePlugin, endLabelPlugin, pointLabelPlugin); pluginsRegistered = true; }
   Chart.defaults.font.family = css('--font-body'); Chart.defaults.color = css('--muted');
   for (const spec of pendingCharts) {
     const canvas = document.getElementById('ch-' + spec.key);
@@ -1867,6 +1895,8 @@ const EXPORTS = {
     S.plantings.slice().sort((a, b) => a.year - b.year || fieldOrder(a.fieldId) - fieldOrder(b.fieldId)).filter(p => fieldById(p.fieldId)).map(p => { const e = econ(p); return [p.year, e.field.name, e.crop.name, e.acres, e.crop.unit, e.expY, e.act, e.harvested ? 'harvested' : 'projected', e.price, r2(e.revenue), r2(e.cost), r2(e.costAc), r2(e.net), r2(e.netAc), e.bePrice != null ? Math.round(e.bePrice * 1000) / 1000 : '', e.beYield != null ? r2(e.beYield) : '', r2(seasonRain(p).total)]; })) },
   scouting: { label: 'Scouting', file: () => `farm-scouting-${today()}.csv`, build: () => toCSV(['date', 'season', 'field', 'crop', 'growth_stage', 'issue', 'severity_1_5', 'notes'],
     S.observations.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(o => { const p = plantingFor(o.fieldId, o.year); return [o.date, o.year, (fieldById(o.fieldId) || {}).name, p ? cropById(p.cropId).name : '', o.stage, issueLabel(o.issue), o.severity, o.note]; })) },
+  trials: { label: 'Hybrid trials', file: () => `farm-hybrid-trials-${today()}.csv`, build: () => toCSV(['season', 'trial', 'strip', 'entry', 'dealer', 'hybrid', 'type', 'moisture_pct', 'test_weight_lb_bu', 'harvest_weight_lb', 'strip_length_ft', 'strip_width_ft', 'strip_acres', 'dry_bu', 'dry_yield_bu_ac', 'vs_nearest_checks_bu_ac', 'rank'],
+    (S.trials || []).flatMap(t => { const R = trialCalc(t); return R.E.map(x => [t.year, t.name, x.order, x.name, x.dealer, x.hybrid, x.type, x.moisture, x.testWeight, x.weight, x.len, R.widthFt || '', x.acres != null ? Math.round(x.acres * 10000) / 10000 : '', x.dryBu != null ? r2(x.dryBu) : '', x.yld != null ? r2(x.yld) : '', x.vsCheck != null ? r2(x.vsCheck) : '', x.rank || '']); })) },
   rainfall: { label: 'Rainfall', file: () => `farm-rainfall-${today()}.csv`, build: () => toCSV(['date', 'gauge', 'inches'], S.rainfall.slice().sort((a, b) => a.date.localeCompare(b.date)).map(r => [r.date, gaugeName(r.fieldId), r.inches])) },
 };
 async function doExport(kind) {
@@ -1904,7 +1934,7 @@ function openDataModal() {
     body: `<div class="data-sec"><h3>Farm name</h3><div style="display:flex;gap:8px"><label class="sr-only" for="dFarm">Farm name</label><input id="dFarm" type="text" value="${esc(S.settings.farmName)}" autocomplete="off"><button type="button" class="btn" data-act="save-farm">Save</button></div></div>
       <div class="data-sec"><h3>Export</h3><p class="small muted">JSON is a full backup you can import later. CSV files open in Excel or Google Sheets.</p>
         <div class="btn-row"><button type="button" class="btn btn-primary" data-act="export" data-id="json">Download JSON backup</button></div>
-        <div class="btn-row">${['inputs', 'plantings', 'profit', 'scouting', 'rainfall'].map(k => `<button type="button" class="btn sm" data-act="export" data-id="${k}">${EXPORTS[k].label} CSV</button>`).join('')}</div>
+        <div class="btn-row">${['inputs', 'plantings', 'profit', 'trials', 'scouting', 'rainfall'].map(k => `<button type="button" class="btn sm" data-act="export" data-id="${k}">${EXPORTS[k].label} CSV</button>`).join('')}</div>
         <div id="exportOut" hidden><div class="fld"><label for="exportText" id="exportLbl">File contents</label><textarea id="exportText" rows="6" readonly></textarea><span class="hint" id="exportHint"></span></div><div class="btn-row" style="margin-top:8px"><button type="button" class="btn" data-act="copy-export">Copy to clipboard</button></div></div></div>
       <div class="data-sec"><h3>Import JSON</h3><p class="small muted">Replaces everything currently saved in this browser.</p>
         <div class="fld"><label for="dFile">Choose a JSON backup file</label><input id="dFile" type="file" accept="application/json,.json"></div>
@@ -1917,14 +1947,353 @@ function openDataModal() {
     } });
 }
 
+
+/* ================= Hybrid trials ================= */
+const TRIAL_SHEET_CSV = ",Moisture ,,Test Weight,,Harvest Weight,,Length\nDealer,,,,,,,\nBuffer Must,,,,,,,843.8\nCheck Must 1,,,,,,,\nPip 1,20.20%,,54.0lb,,2801,,\nDeklab DKC,19.10%,,53.10lb,,,,\nLegend 9700,20.30%,,53.6lb,,3011,,\nLegend 9797,19.40%,,55.3lb,,,,\nCheck Must 2 ,20.90%,,53.4lb,,3400,,\nLegend 9702,,,,,,,\nNorthrup King 1,20.30%,,54.3lb,,3200,,\nPioneer 1,,,,,,,\nBrevant 1,19.40%,,53.5lb,,2982,,\nCheck Must 3,21.50%,,53.1lb,,,,\nLG 49Q98 SS,18.40%,,56.1lb,,3305,,\nNorthrup King 2,,,,,,,\nRenk RK,18.40%,,55.3lb,,3217,,\nBeck's 1,,,,,,,\nCheck Must 4,21.50%,,53.7lb,,3477,,\nDairyland 1,,,,,,,\nBrevant 2,20.00%,,56.4lb,,3090,,\nPioneer 2,,,,,,,\nRenk ,18.70%,,56.2lb,,3025,,\nCheck Must 5,,,,,,,\nWyffels 1,20.20%,,53.5lb,,3200,,\nDeklab DKC,,,,,,,\nWyffels 2,20.30%,,52.0lb,,3048,,\nBeck's 2,,,,,,,\nCheck Must 6,21.80%,,54.0lb,,3200,,\nDairyland 2,,,,,,,\nPip 2,23.90%,,52.1lb,,3097,,\nCheck Must 7,,,,,,,\nBio Test Plot,,,,,,,\nCheck-2,22.80%,,52.4lb,,3724,,\nLeg 9698 NPHY,,,,,,,\nLeg 9698 TS3P,19.90%,,55.5lb,,3170,,";
+const LB_PER_BU = { corn: 56, sorghum: 56, soybeans: 60, 'wheat-winter': 60, 'wheat-spring': 60, oats: 32 };
+const STD_MOIST = { corn: 15, soybeans: 13, 'wheat-winter': 13.5, 'wheat-spring': 13.5, sorghum: 14, oats: 14 };
+const DEALERS = [[/^(deklab|dekalb|dkc)\b/i, 'DeKalb'], [/^(legend|leg)\b/i, 'Legend'], [/^(northrup king|nk)\b/i, 'Northrup King'], [/^pioneer\b/i, 'Pioneer'],
+  [/^brevant\b/i, 'Brevant'], [/^lg\b/i, 'LG Seeds'], [/^renk\b/i, 'Renk'], [/^beck'?s?\b/i, "Beck's"], [/^dairyland\b/i, 'Dairyland'], [/^wyffels\b/i, 'Wyffels'],
+  [/^(golden harvest)\b/i, 'Golden Harvest'], [/^channel\b/i, 'Channel'], [/^stine\b/i, 'Stine'], [/^agrigold\b/i, 'AgriGold'], [/^pip\b/i, 'Pip']];
+const pnum = s => { if (s == null) return null; const m = String(s).replace(/,/g, '').match(/-?\d+(\.\d+)?/); return m ? parseFloat(m[0]) : null; };
+function parseEntryName(raw) {
+  const name = String(raw || '').replace(/\s+/g, ' ').trim();
+  if (/^buffer\b/i.test(name)) return { name, type: 'buffer', dealer: '', hybrid: name.replace(/^buffer\s*/i, '') };
+  if (/^check\b/i.test(name)) return { name, type: 'check', dealer: 'Check', hybrid: name.replace(/^check[\s-]*/i, '').replace(/\s*\d+$/, '') || 'Check' };
+  for (const [re, d] of DEALERS) { const m = name.match(re); if (m) return { name, type: 'entry', dealer: d, hybrid: name.slice(m[0].length).trim() }; }
+  const parts = name.split(' ');
+  return { name, type: 'entry', dealer: parts[0] || '', hybrid: parts.slice(1).join(' ') };
+}
+function parseDelimited(text) {
+  const first = text.split(/\r?\n/)[0] || '';
+  const delim = first.split('\t').length > first.split(',').length ? '\t' : ',';
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === delim) { row.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += ch;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  return rows.map(r => r.map(c => c.trim()));
+}
+/* Reads a strip-trial sheet: a header row with Moisture / Test Weight / Harvest Weight / Length,
+   entry names in the first column, and a data-less row such as "Bio Test Plot" starting a new trial. */
+function parseTrialSheet(text) {
+  const rows = parseDelimited(String(text || ''));
+  const hi = rows.findIndex(r => r.some(c => /moist/i.test(c)));
+  if (hi < 0) return { error: 'Couldn\'t find a Moisture column. The sheet needs a header row with Moisture, Test Weight and Harvest Weight.' };
+  const H = rows[hi].map(c => c.toLowerCase());
+  const col = test => H.findIndex(test);
+  const cM = col(c => /moist/.test(c)), cT = col(c => /test\s*w/.test(c));
+  const cW = col(c => /(weight|wt|lbs?)\b/.test(c) && !/test/.test(c));
+  const cL = col(c => /length|\blen\b|feet|\bft\b/.test(c));
+  let cN = col(c => /dealer|hybrid|entry|variety|name|brand/.test(c)); if (cN < 0) cN = 0;
+  if (cW < 0) return { error: 'Couldn\'t find a harvest weight column (a header with "Weight" in it).' };
+  const trials = []; let cur = null, lastLen = null;
+  const start = name => { cur = { name, stripLength: null, entries: [] }; trials.push(cur); };
+  for (const r of rows.slice(hi + 1)) {
+    const name = (r[cN] || '').replace(/\s+/g, ' ').trim();
+    const m = cM >= 0 ? pnum(r[cM]) : null, tw = cT >= 0 ? pnum(r[cT]) : null, w = pnum(r[cW]), len = cL >= 0 ? pnum(r[cL]) : null;
+    const hasData = m != null || tw != null || w != null || len != null;
+    if (!name && !hasData) continue;
+    if (!hasData && /^(dealer|hybrid|entry|name|variety|brand)$/i.test(name)) continue;
+    if (!hasData && /(test plot|\bplot\b|\btrial\b|\bsection\b|\bblock\b)/i.test(name)) { start(name.replace(/\btest plot\b/i, 'test plot')); if (lastLen) cur.stripLength = lastLen; continue; }
+    if (!cur) start('Hybrid plot');
+    if (len != null && cur.stripLength == null) { cur.stripLength = len; lastLen = len; }
+    const p = parseEntryName(name || `Strip ${cur.entries.length + 1}`);
+    cur.entries.push({ ...p, order: cur.entries.length + 1, moisture: m, testWeight: tw, weight: w, length: len != null && len !== cur.stripLength ? len : null });
+  }
+  for (const t of trials) if (t.stripLength == null) t.stripLength = lastLen;
+  const out = trials.filter(t => t.entries.length);
+  if (!out.length) return { error: 'No strips found under the header row.' };
+  return { trials: out };
+}
+function makeTrial(parsed, opts) {
+  return { id: uid('t'), name: parsed.name.charAt(0).toUpperCase() + parsed.name.slice(1), year: opts.year, cropId: opts.cropId || 'corn', fieldId: opts.fieldId || null, location: opts.location || '',
+    stripLength: parsed.stripLength, rows: opts.rows, rowSpacing: opts.rowSpacing, stdMoisture: opts.stdMoisture, price: null, notes: opts.notes || '',
+    entries: parsed.entries.map(e => ({ id: uid('e'), order: e.order, name: e.name, type: e.type, dealer: e.dealer, hybrid: e.hybrid, moisture: e.moisture, testWeight: e.testWeight, weight: e.weight, length: e.length, notes: '' })) };
+}
+function seedTrials() {
+  const r = parseTrialSheet(TRIAL_SHEET_CSV);
+  if (r.error) return [];
+  return r.trials.map(t => makeTrial(t, { year: 2026, rows: 8, rowSpacing: 30, stdMoisture: 15, notes: 'Imported from the farm\'s hybrid plot spreadsheet. Strip length came from the Buffer row; confirm rows and row spacing.' }));
+}
+function normTrial(t) {
+  return { id: String(t.id || uid('t')), name: String(t.name || 'Trial'), year: num(t.year) ?? new Date().getFullYear(), cropId: String(t.cropId || 'corn'), fieldId: t.fieldId ? String(t.fieldId) : null,
+    location: String(t.location || ''), stripLength: num(t.stripLength), rows: num(t.rows), rowSpacing: num(t.rowSpacing), stdMoisture: num(t.stdMoisture), price: num(t.price), notes: String(t.notes || ''),
+    entries: (Array.isArray(t.entries) ? t.entries : []).map((e, i) => ({ id: String(e.id || uid('e')), order: num(e.order) ?? i + 1, name: String(e.name || ''), type: ['entry', 'check', 'buffer'].includes(e.type) ? e.type : 'entry',
+      dealer: String(e.dealer || ''), hybrid: String(e.hybrid || ''), moisture: num(e.moisture), testWeight: num(e.testWeight), weight: num(e.weight), length: num(e.length), notes: String(e.notes || '') })) };
+}
+function trialCalc(t) {
+  const crop = cropById(t.cropId), lbBu = LB_PER_BU[t.cropId] || 56;
+  const std = num(t.stdMoisture) ?? (STD_MOIST[t.cropId] ?? 15);
+  const widthFt = (num(t.rows) || 0) * (num(t.rowSpacing) || 0) / 12;
+  const price = num(t.price) ?? crop.price;
+  const E = t.entries.slice().sort((a, b) => a.order - b.order).map(e => {
+    const len = num(e.length) ?? num(t.stripLength);
+    const acres = len && widthFt ? len * widthFt / 43560 : null;
+    const dryBu = e.weight != null && e.moisture != null ? e.weight * (100 - e.moisture) / (100 - std) / lbBu : null;
+    const yld = dryBu != null && acres ? dryBu / acres : null;
+    return Object.assign({}, e, { len, acres, dryBu, yld, rev: yld != null ? yld * price : null, rank: null, vsCheck: null, checkRef: null });
+  });
+  const checks = E.filter(x => x.type === 'check' && x.yld != null);
+  for (const x of E) {
+    if (x.yld == null || x.type !== 'entry') continue;
+    const ref = [checks.filter(c => c.order < x.order).pop(), checks.find(c => c.order > x.order)].filter(Boolean);
+    if (ref.length) { x.checkRef = sum(ref, c => c.yld) / ref.length; x.vsCheck = x.yld - x.checkRef; x.checkNames = ref.map(c => c.name); }
+  }
+  const scored = E.filter(x => x.type === 'entry' && x.yld != null).sort((a, b) => b.yld - a.yld);
+  scored.forEach((x, i) => { x.rank = i + 1; });
+  const avg = (arr, f) => { const v = arr.map(f).filter(z => z != null); return v.length ? sum(v) / v.length : null; };
+  const dealers = [];
+  for (const x of scored) { let g = dealers.find(d => d.dealer === (x.dealer || '—')); if (!g) { g = { dealer: x.dealer || '—', items: [] }; dealers.push(g); } g.items.push(x); }
+  dealers.forEach(g => { g.yld = avg(g.items, x => x.yld); g.moist = avg(g.items, x => x.moisture); g.tw = avg(g.items, x => x.testWeight); g.best = g.items[0]; });
+  dealers.sort((a, b) => b.yld - a.yld);
+  return { t, crop, std, lbBu, widthFt, price, E, scored, checks, dealers, checkAvg: avg(checks, c => c.yld), plotAvg: avg(scored, x => x.yld),
+    moistAvg: avg(scored, x => x.moisture), twAvg: avg(scored, x => x.testWeight), stripAcres: num(t.stripLength) && widthFt ? num(t.stripLength) * widthFt / 43560 : null };
+}
+function trialsInView() {
+  return (S.trials || []).filter(t => t.year === UI.year && (UI.crop === 'all' || t.cropId === UI.crop) && (UI.field === 'all' || !t.fieldId || t.fieldId === UI.field));
+}
+
+function viewTrials() {
+  const list = trialsInView();
+  const btns = `<button type="button" class="btn" data-act="import-trial">Import sheet</button><button type="button" class="btn btn-primary" data-act="add-trial">+ Add trial</button>`;
+  if (!list.length) {
+    const other = [...new Set((S.trials || []).map(t => t.year))].sort();
+    return `<div class="toolbar"><div><h2>Hybrid trials</h2><p>${UI.year} season</p></div><div class="toolbar-actions">${btns}</div></div>
+      <section class="card"><p class="muted">No trials for ${UI.year}${other.length ? ` (trials exist for ${other.join(', ')})` : ''}. Import a strip-trial spreadsheet or add a trial by hand.</p></section>`;
+  }
+  const t = list.find(x => x.id === UI.trialId) || list[0];
+  const R = trialCalc(t), unit = 'bu/ac';
+  const weighed = R.E.filter(x => x.yld != null).length;
+  const sel = list.length > 1 ? `<label class="sr-only" for="trialSel">Trial</label><select id="trialSel" style="width:auto;min-width:200px">${list.map(x => `<option value="${esc(x.id)}"${x.id === t.id ? ' selected' : ''}>${esc(x.name)}${x.fieldId && fieldById(x.fieldId) ? ' · ' + esc(fieldById(x.fieldId).name) : ''} (${x.entries.length} strips)</option>`).join('')}</select>` : '';
+  const f = t.fieldId ? fieldById(t.fieldId) : null;
+  let html = `<div class="toolbar"><div><h2>Hybrid trials</h2><p>${esc(t.name)} · ${t.year} · ${esc(R.crop.name)} · ${t.entries.length} strips, ${weighed} weighed${f ? ` · ${esc(f.name)}` : ''}${t.location ? ` · ${esc(t.location)}` : ''}</p></div><div class="toolbar-actions">${sel}${btns}</div></div>`;
+  const setup = `Strips ${nf(num(t.stripLength), 1)} ft long × ${nf(num(t.rows))} rows at ${nf(num(t.rowSpacing))} in (${nf(R.widthFt, 1)} ft) = ${R.stripAcres ? nf(R.stripAcres, 3) : '—'} ac each · dry yield at ${nf(R.std, 1)}% moisture, ${R.lbBu} lb/bu · ${fmtPrice(R.price, R.crop.unit)}`;
+  html += `<section class="card trial-setup"><p>${setup}</p><div class="btn-row"><button type="button" class="btn sm" data-act="edit-trial" data-id="${esc(t.id)}">Edit trial settings</button><button type="button" class="btn sm" data-act="add-entry" data-id="${esc(t.id)}">+ Add strip</button><button type="button" class="btn btn-ghost sm danger" data-act="del-trial" data-id="${esc(t.id)}">Delete trial</button></div></section>`;
+  if (!R.stripAcres) html += `<div class="banner warn" role="alert"><p>Enter the strip length, rows and row spacing in the trial settings to calculate bu/ac.</p></div>`;
+  const top = R.scored[0];
+  const lowM = R.scored.slice().sort((a, b) => a.moisture - b.moisture)[0];
+  const sgn = v => (v >= 0 ? '+' : '−') + nf(Math.abs(v), 1);
+  html += `<section class="tiles" aria-label="Trial summary">
+    <div class="tile"><div class="tile-label">Entry average</div><div class="tile-value">${R.plotAvg != null ? nf(R.plotAvg, 1) : '—'}<span class="unit">bu/ac</span></div><div class="tile-sub">${R.scored.length} weighed entries, checks excluded</div></div>
+    <div class="tile"><div class="tile-label">Top entry</div><div class="tile-value">${top ? nf(top.yld, 1) : '—'}<span class="unit">bu/ac</span></div><div class="tile-sub">${top ? `${esc(top.name)} · ${nf(top.moisture, 1)}% moisture${top.vsCheck != null ? ` · ${sgn(top.vsCheck)} vs checks` : ''}` : 'No weighed entries yet'}</div></div>
+    <div class="tile"><div class="tile-label">Check average</div><div class="tile-value">${R.checkAvg != null ? nf(R.checkAvg, 1) : '—'}<span class="unit">bu/ac</span></div><div class="tile-sub">${R.checks.length} check strip${R.checks.length === 1 ? '' : 's'} weighed</div></div>
+    <div class="tile"><div class="tile-label">Harvest moisture</div><div class="tile-value">${R.moistAvg != null ? nf(R.moistAvg, 1) : '—'}<span class="unit">%</span></div><div class="tile-sub">${lowM ? `Driest: ${esc(lowM.name)} ${nf(lowM.moisture, 1)}%` : ''}${R.twAvg != null ? ` · test wt avg ${nf(R.twAvg, 1)} lb/bu` : ''}</div></div>
+  </section>`;
+
+  // Charts
+  const ranked = R.E.filter(x => x.yld != null && x.type !== 'buffer').sort((a, b) => b.yld - a.yld);
+  const cYield = chartCard({ key: 'trial-yield', title: 'Dry yield by entry', sub: `bu/ac at ${nf(R.std, 1)}% moisture · highest first`, height: Math.max(240, ranked.length * 26 + 50),
+    legend: legendItem('var(--act)', 'Entry') + legendItem('var(--exp)', 'Check strip') + (R.checkAvg != null ? legendItem('var(--ink-2)', `Check average ${nf(R.checkAvg, 1)}`, true) : ''),
+    empty: ranked.length ? null : 'No strips weighed yet.',
+    aria: `Bar chart of dry yield by entry: ${ranked.map(x => `${x.name} ${nf(x.yld, 1)}`).join(', ')}`,
+    table: { head: [{ t: 'Entry' }, { t: 'Dealer' }, { t: 'Dry yield', num: 1 }, { t: 'vs checks', num: 1 }], rows: ranked.map(x => [esc(x.name) + (x.type === 'check' ? ' <span class="chip">Check</span>' : ''), esc(x.dealer || '—'), nf(x.yld, 1) + ' bu/ac', x.vsCheck != null ? `<span class="${x.vsCheck >= 0 ? 'pos' : 'neg'}">${sgn(x.vsCheck)}</span>` : '—']),
+      bar: { vals: ranked.map(x => x.yld), color: i => ranked[i].type === 'check' ? 'var(--exp)' : 'var(--act)', label: 'Dry yield' } },
+    build: () => ({ type: 'bar', data: { labels: ranked.map(x => x.name), datasets: [{ label: 'Dry yield', data: ranked.map(x => r2(x.yld)), backgroundColor: ranked.map(x => css(x.type === 'check' ? '--exp' : '--act')) }] },
+      meta: { fmt: v => `${nf(v, 1)} bu/ac`, title: i => `${ranked[i].name}${ranked[i].dealer && ranked[i].type === 'entry' ? ' · ' + ranked[i].dealer : ''}`, valueLabel: v => nf(v, 1),
+        note: i => { const x = ranked[i]; return `${nf(x.moisture, 1)}% moisture · ${x.testWeight != null ? nf(x.testWeight, 1) + ' lb/bu test wt' : 'no test wt'}${x.vsCheck != null ? ` · ${sgn(x.vsCheck)} vs nearest checks` : ''}`; },
+        refLine: R.checkAvg != null ? { v: R.checkAvg, label: 'Check avg' } : null },
+      opts: { indexAxis: 'y', padTop: 18 } }) });
+  const sc = R.E.filter(x => x.yld != null && x.moisture != null && x.type !== 'buffer');
+  const cScatter = chartCard({ key: 'trial-scatter', title: 'Yield vs harvest moisture', sub: 'Upper left is best: high yield, dry grain', height: 300,
+    legend: legendItem('var(--act)', 'Entry') + legendItem('var(--exp)', 'Check strip'),
+    empty: sc.length ? null : 'No strips weighed yet.', aria: 'Scatter plot of dry yield against harvest moisture for each strip',
+    table: { head: [{ t: 'Entry' }, { t: 'Moisture', num: 1 }, { t: 'Dry yield', num: 1 }, { t: 'Test wt', num: 1 }], rows: sc.slice().sort((a, b) => a.moisture - b.moisture).map(x => [esc(x.name), nf(x.moisture, 1) + '%', nf(x.yld, 1) + ' bu/ac', x.testWeight != null ? nf(x.testWeight, 1) + ' lb/bu' : '—']) },
+    build: () => buildTrialScatter(sc) });
+  const D = R.dealers.slice();
+  const chkRow = R.checkAvg != null ? { dealer: `Check (${R.checks[0] ? R.checks[0].hybrid : ''})`, yld: R.checkAvg, items: R.checks, moist: R.checks.length ? sum(R.checks, c => c.moisture) / R.checks.length : null, isCheck: true } : null;
+  const DD = chkRow ? D.concat([chkRow]).sort((a, b) => b.yld - a.yld) : D;
+  const cDealer = chartCard({ key: 'trial-dealer', title: 'Average yield by dealer', sub: 'Mean of each dealer\'s weighed entries · bu/ac', height: Math.max(220, DD.length * 30 + 40),
+    empty: D.length ? null : 'No weighed entries yet.', aria: `Bar chart of average dry yield by dealer: ${DD.map(d => `${d.dealer} ${nf(d.yld, 1)}`).join(', ')}`,
+    table: { head: [{ t: 'Dealer' }, { t: 'Entries', num: 1 }, { t: 'Avg yield', num: 1 }, { t: 'Avg moisture', num: 1 }, { t: 'Best entry' }],
+      rows: DD.map(d => [esc(d.dealer), d.items.length, nf(d.yld, 1) + ' bu/ac', d.moist != null ? nf(d.moist, 1) + '%' : '—', d.isCheck ? '—' : `${esc(d.best.name)} (${nf(d.best.yld, 1)})`]),
+      bar: { vals: DD.map(d => d.yld), color: i => DD[i].isCheck ? 'var(--exp)' : 'var(--cost)', label: 'Avg yield' } },
+    build: () => ({ type: 'bar', data: { labels: DD.map(d => d.dealer), datasets: [{ label: 'Average yield', data: DD.map(d => r2(d.yld)), backgroundColor: DD.map(d => css(d.isCheck ? '--exp' : '--cost')) }] },
+      meta: { fmt: v => `${nf(v, 1)} bu/ac`, valueLabel: v => nf(v, 1), note: i => `${DD[i].items.length} ${DD[i].isCheck ? 'check strips' : 'entr' + (DD[i].items.length === 1 ? 'y' : 'ies')}${DD[i].moist != null ? ` · ${nf(DD[i].moist, 1)}% moisture` : ''}` },
+      opts: { indexAxis: 'y' } }) });
+  html += `<section class="charts">${cYield}<div style="display:flex;flex-direction:column;gap:20px;min-width:0">${cScatter}${cDealer}</div></section>`;
+
+  // Strip table
+  const sort = UI.trialSort === 'rank' ? 'rank' : 'order';
+  const rows = sort === 'rank' ? R.E.slice().sort((a, b) => (b.yld ?? -1) - (a.yld ?? -1) || a.order - b.order) : R.E;
+  html += `<section class="card"><div class="card-head"><div><h3>Strip results</h3><p class="sub">Dry yield = harvest wt × (100 − moisture) ÷ (100 − ${nf(R.std, 1)}) ÷ ${R.lbBu} lb/bu ÷ strip acres. "vs checks" compares each entry with the average of the nearest weighed check strip on each side.</p></div>
+    <div class="seg" role="group" aria-label="Sort strips"><button type="button" data-act="trial-sort" data-id="order" aria-pressed="${sort === 'order'}">Field order</button><button type="button" data-act="trial-sort" data-id="rank" aria-pressed="${sort === 'rank'}">Highest yield</button></div></div>
+    <div class="table-wrap"><table class="rtable dense"><thead><tr><th class="num">Strip</th><th>Entry</th><th>Dealer</th><th class="num">Moisture</th><th class="num">Test wt</th><th class="num">Harvest wt</th><th class="num">Dry yield</th><th class="num">vs checks</th><th class="num">Rank</th><th class="num">Gross $/ac</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>
+    ${rows.map(x => { const blank = x.yld == null, partial = blank && (x.moisture != null || x.testWeight != null); return `<tr class="${blank && !partial ? 'blank-row' : ''}${x.type !== 'entry' ? ' check-row' : ''}">
+      <td class="num" data-label="Strip">${x.order}</td>
+      <td class="rt-title" data-label="Entry">${esc(x.name)}${x.type === 'check' ? ' <span class="chip">Check</span>' : x.type === 'buffer' ? ' <span class="chip">Buffer</span>' : ''}</td>
+      <td data-label="Dealer">${esc(x.dealer || '—')}</td>
+      <td class="num" data-label="Moisture">${x.moisture != null ? nf(x.moisture, 1) + '%' : '—'}</td>
+      <td class="num" data-label="Test wt">${x.testWeight != null ? nf(x.testWeight, 1) + ' lb/bu' : '—'}</td>
+      <td class="num" data-label="Harvest wt">${x.weight != null ? nf(x.weight) + ' lb' : '—'}</td>
+      <td class="num keep" data-label="Dry yield">${blank ? `<span class="muted">${x.type === 'buffer' ? 'Buffer' : partial ? 'No harvest weight' : 'Not weighed'}</span>` : `<b>${nf(x.yld, 1)}</b> bu/ac`}</td>
+      <td class="num" data-label="vs checks">${x.vsCheck != null ? `<span class="${x.vsCheck >= 0 ? 'pos' : 'neg'}">${sgn(x.vsCheck)}</span>` : '—'}</td>
+      <td class="num" data-label="Rank">${x.rank ? `${x.rank} of ${R.scored.length}` : '—'}</td>
+      <td class="num" data-label="Gross $/ac">${x.rev != null ? money(x.rev) : '—'}</td>
+      <td class="actions">${blank && x.type !== 'buffer' ? `<button type="button" class="btn sm" data-act="edit-entry" data-id="${esc(t.id)}|${esc(x.id)}">Enter data</button>` : `<button type="button" class="icon-btn" data-act="edit-entry" data-id="${esc(t.id)}|${esc(x.id)}" aria-label="Edit ${esc(x.name)}">${ICON.edit}</button>`}<button type="button" class="icon-btn danger" data-act="del-entry" data-id="${esc(t.id)}|${esc(x.id)}" aria-label="Delete ${esc(x.name)}">${ICON.del}</button></td></tr>`; }).join('')}
+    </tbody></table></div>${t.notes ? `<p class="chart-note">${esc(t.notes)}</p>` : ''}</section>`;
+  return html;
+}
+
+function buildTrialScatter(sc) {
+  const t = theme();
+  const ent = sc.filter(x => x.type === 'entry'), chk = sc.filter(x => x.type === 'check');
+  const mk = (arr, col, label) => ({ label, data: arr.map(x => ({ x: x.moisture, y: r2(x.yld), e: x })), backgroundColor: col, borderColor: t.surface, borderWidth: 2, pointRadius: 6, pointHoverRadius: 7, pointHitRadius: 10 });
+  const top = ent.slice().sort((a, b) => b.yld - a.yld).slice(0, 3).map(x => ent.indexOf(x));
+  return { custom: true, meta: { pointLabels: top,
+      tip: tooltip => { const dp = tooltip.dataPoints[0], e = dp.raw.e; return { title: e.name + (e.type === 'entry' && e.dealer ? ' · ' + e.dealer : ''), rows: [{ color: dp.dataset.backgroundColor, value: `${nf(e.yld, 1)} bu/ac`, label: 'dry yield' }, { color: dp.dataset.backgroundColor, value: `${nf(e.moisture, 1)}%`, label: 'moisture' }], note: `${e.testWeight != null ? nf(e.testWeight, 1) + ' lb/bu test wt' : ''}${e.rank ? ` · rank ${e.rank}` : ''}` }; } },
+    config: { type: 'scatter', data: { datasets: [mk(ent, css('--act'), 'Entry'), mk(chk, css('--exp'), 'Check strip')] },
+      options: { responsive: true, maintainAspectRatio: false, animation: reduceMotion() ? false : { duration: 350 }, layout: { padding: { top: 12, right: 16 } },
+        interaction: { mode: 'nearest', intersect: false, axis: 'xy' }, plugins: { legend: { display: false }, tooltip: { enabled: false, external: externalTooltip } },
+        scales: { x: { grace: '5%', grid: { color: t.grid, drawTicks: false }, border: { color: t.base }, ticks: { color: t.muted, padding: 6, callback: v => v + '%' }, title: { display: true, text: 'Harvest moisture (%)', color: t.muted, font: { size: 12 } } },
+          y: { grace: '5%', grid: { color: t.grid, drawTicks: false }, border: { display: false }, ticks: { color: t.muted, padding: 8, maxTicksLimit: 6 }, title: { display: true, text: 'Dry yield (bu/ac)', color: t.muted, font: { size: 12 } } } } } } };
+}
+const pointLabelPlugin = { id: 'ffPointLabels', afterDatasetsDraw(chart) {
+  const m = chartMeta.get(chart.canvas); if (!m || !m.pointLabels) return;
+  const meta = chart.getDatasetMeta(0), ds = chart.data.datasets[0], ctx = chart.ctx;
+  ctx.save(); ctx.font = `600 12px ${css('--font-body')}`; ctx.fillStyle = css('--ink-2'); ctx.textBaseline = 'middle';
+  for (const i of m.pointLabels) { const el = meta.data[i]; if (!el) continue; const txt = ds.data[i].e.name; const w = ctx.measureText(txt).width; const right = el.x + 10 + w > chart.chartArea.right; ctx.textAlign = right ? 'right' : 'left'; ctx.fillText(txt, el.x + (right ? -10 : 10), el.y); }
+  ctx.restore();
+} };
+
+/* ---------- Trials on field cards ---------- */
+function fieldTrialsHtml(f, y) {
+  const trs = (S.trials || []).filter(t => t.fieldId === f.id && t.year === y);
+  return `<div class="fc-trials"><div class="fc-trials-head"><span class="small muted">Hybrid trials · ${y}</span><button type="button" class="btn btn-ghost sm" data-act="field-add-trial" data-id="${esc(f.id)}">+ Add trial</button></div>
+    ${trs.length ? `<ul class="fc-trial-list">${trs.map(t => { const R = trialCalc(t), top = R.scored[0], weighed = R.E.filter(x => x.yld != null).length;
+      return `<li><button type="button" class="trial-link" data-act="open-trial" data-id="${esc(t.id)}"><span class="tl-name">${esc(t.name)}</span><span class="tl-meta">${t.entries.length} strips · ${weighed} weighed · ${R.dealers.length} dealer${R.dealers.length === 1 ? '' : 's'}${top ? ` · top: ${esc(top.name)} ${nf(top.yld, 1)} bu/ac` : ''}</span></button></li>`; }).join('')}</ul>`
+      : '<p class="small muted">No trials on this field yet.</p>'}</div>`;
+}
+function openFieldTrialChooser(fieldId) {
+  const f = fieldById(fieldId); if (!f) return;
+  const unlinked = (S.trials || []).filter(t => !t.fieldId && t.year === UI.year);
+  openModal({ title: `Add a trial to ${f.name}`, noSubmit: true,
+    body: `<p class="small muted" style="margin-bottom:12px">Compare each dealer's entries on this field using strip weights, moisture and test weight, measured against check strips.</p>
+      <div class="choice-list">
+        <button type="button" class="btn btn-primary" data-act="field-trial-import" data-id="${esc(fieldId)}">Import a trial sheet</button>
+        <button type="button" class="btn" data-act="field-trial-new" data-id="${esc(fieldId)}">Start a blank trial and enter strips by hand</button>
+        ${unlinked.length ? `<p class="small muted" style="margin-top:6px">Or put a ${UI.year} trial that isn't on a field yet onto ${esc(f.name)}:</p>${unlinked.map(t => `<button type="button" class="btn" data-act="field-trial-link" data-id="${esc(fieldId)}|${esc(t.id)}">Link ${esc(t.name)} (${t.entries.length} strips)</button>`).join('')}` : ''}
+      </div>` });
+}
+
+/* ---------- Trial modals ---------- */
+const findEntry = key => { const [tid, eid] = String(key).split('|'); const t = (S.trials || []).find(x => x.id === tid); return { t, e: t ? t.entries.find(x => x.id === eid) : null }; };
+function openTrialModal(id, preset = {}) {
+  const t = id ? (S.trials || []).find(x => x.id === id) : null;
+  const d = t || Object.assign({ name: '', year: UI.year, cropId: 'corn', fieldId: UI.field !== 'all' ? UI.field : null, location: '', stripLength: null, rows: 8, rowSpacing: 30, stdMoisture: 15, price: null, notes: '' }, preset);
+  const tc = S.crops.filter(c => LB_PER_BU[c.id]);
+  openModal({ title: t ? `Edit ${t.name}` : 'Add trial', submitLabel: t ? 'Save trial' : 'Add trial', wide: true,
+    body: `<div class="form-grid">
+      <div class="fld"><label for="tName">Trial name</label><input id="tName" type="text" value="${esc(d.name)}" placeholder="e.g. Hybrid plot" autocomplete="off"></div>
+      <div class="fld"><label for="tYear">Season</label>${yearSelect('tYear', d.year)}</div>
+      <div class="fld"><label for="tCrop">Crop</label><select id="tCrop">${tc.map(c => `<option value="${c.id}"${c.id === d.cropId ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
+      <div class="fld"><label for="tField">Field</label><select id="tField"><option value="">Not linked to a field</option>${S.fields.map(f => `<option value="${esc(f.id)}"${f.id === d.fieldId ? ' selected' : ''}>${esc(f.name)}</option>`).join('')}</select></div>
+      <div class="fld span-2"><label for="tLoc">Location note</label><input id="tLoc" type="text" value="${esc(d.location)}" placeholder="Where the plot is" autocomplete="off"></div>
+      <div class="fld"><label for="tLen">Strip length</label>${unitField('tLen', d.stripLength, 'ft')}</div>
+      <div class="fld"><label for="tRows">Rows harvested per strip</label>${unitField('tRows', d.rows, 'rows')}</div>
+      <div class="fld"><label for="tSpace">Row spacing</label>${unitField('tSpace', d.rowSpacing, 'in')}</div>
+      <div class="fld"><label for="tStd">Standard moisture</label>${unitField('tStd', d.stdMoisture, '%')}<span class="hint">Wet weights are adjusted to this moisture.</span></div>
+      <div class="fld"><label for="tPrice">Price</label>${unitField('tPrice', d.price, '$/bu')}<span class="hint">Blank uses the crop's default price.</span></div>
+      <div class="fld span-2"><label for="tNotes">Notes</label><input id="tNotes" type="text" value="${esc(d.notes)}" autocomplete="off"></div>
+      <div class="calc" id="tCalc" aria-live="polite"></div>
+    </div>`,
+    onOpen: () => {
+      const upd = () => { const len = num(val('tLen')), w = (num(val('tRows')) || 0) * (num(val('tSpace')) || 0) / 12; $('#tCalc').textContent = len && w ? `Each strip: ${nf(len, 1)} ft × ${nf(w, 1)} ft = ${nf(len * w / 43560, 3)} ac` : 'Enter strip length, rows and row spacing to get strip acres.'; };
+      ['tLen', 'tRows', 'tSpace'].forEach(x => $('#' + x).addEventListener('input', upd)); upd();
+    },
+    onSubmit: () => {
+      const name = val('tName'); if (!name) return 'Enter a trial name.';
+      const len = num(val('tLen')), rows = num(val('tRows')), sp = num(val('tSpace')), std = num(val('tStd'));
+      if (len != null && len <= 0) return 'Strip length must be more than 0.';
+      if (std != null && (std < 0 || std >= 40)) return 'Standard moisture should be between 0 and 40%.';
+      const data = { name, year: +val('tYear'), cropId: val('tCrop'), fieldId: val('tField') || null, location: val('tLoc'), stripLength: len, rows, rowSpacing: sp, stdMoisture: std, price: num(val('tPrice')), notes: val('tNotes') };
+      if (t) Object.assign(t, data); else { const nt = Object.assign({ id: uid('t'), entries: [] }, data); S.trials.push(nt); UI.trialId = nt.id; }
+      UI.year = data.year; commit(); toast(t ? 'Trial saved' : `Added ${name}`);
+      if (!t && UI.tab !== 'trials') location.hash = '#trials';
+    } });
+}
+function openEntryModal(key, newForTrial) {
+  let t, e;
+  if (newForTrial) { t = (S.trials || []).find(x => x.id === newForTrial); e = null; } else ({ t, e } = findEntry(key));
+  if (!t) return;
+  const d = e || { order: Math.max(0, ...t.entries.map(x => x.order)) + 1, name: '', type: 'entry', dealer: '', hybrid: '', moisture: null, testWeight: null, weight: null, length: null, notes: '' };
+  openModal({ title: e ? `${e.name || 'Strip'} · strip ${e.order}` : `Add strip to ${t.name}`, submitLabel: e ? 'Save strip' : 'Add strip', wide: true,
+    body: `<div class="form-grid">
+      <div class="fld"><label for="eName">Entry name</label><input id="eName" type="text" value="${esc(d.name)}" placeholder="e.g. Pioneer 1" autocomplete="off"></div>
+      <div class="fld"><label for="eOrder">Strip number (field order)</label><input id="eOrder" type="number" inputmode="numeric" min="1" step="1" value="${esc(d.order)}"></div>
+      <div class="fld"><label for="eDealer">Seed dealer</label><input id="eDealer" type="text" list="eDealerList" value="${esc(d.dealer)}" autocomplete="off"><datalist id="eDealerList">${[...new Set((S.trials || []).flatMap(x => x.entries.map(y => y.dealer)).filter(Boolean))].sort().map(v => `<option value="${esc(v)}"></option>`).join('')}</datalist></div>
+      <div class="fld"><label for="eHybrid">Hybrid / product</label><input id="eHybrid" type="text" value="${esc(d.hybrid)}" autocomplete="off"></div>
+      <div class="fld span-2"><span class="lbl" id="eTypeLbl">Strip type</span><div class="choice" role="radiogroup" aria-labelledby="eTypeLbl">${[['entry', 'Entry'], ['check', 'Check'], ['buffer', 'Buffer']].map(([v, l]) => `<label><input type="radio" name="eType" value="${v}"${d.type === v ? ' checked' : ''}><span>${l}</span></label>`).join('')}</div></div>
+      <div class="fld"><label for="eMoist">Moisture</label>${unitField('eMoist', d.moisture, '%')}</div>
+      <div class="fld"><label for="eTw">Test weight</label>${unitField('eTw', d.testWeight, 'lb/bu')}</div>
+      <div class="fld"><label for="eWt">Harvest weight</label>${unitField('eWt', d.weight, 'lb')}</div>
+      <div class="fld"><label for="eLen">Strip length</label>${unitField('eLen', d.length, 'ft', `placeholder="${t.stripLength != null ? nf(t.stripLength, 1) : ''}"`)}<span class="hint">Blank uses the trial's length.</span></div>
+      <div class="fld span-2"><label for="eNotes">Notes</label><input id="eNotes" type="text" value="${esc(d.notes)}" autocomplete="off"></div>
+      <div class="calc" id="eCalc" aria-live="polite"></div>
+    </div>`,
+    onOpen: () => {
+      $('#eName').addEventListener('change', () => { if (!val('eDealer') && val('eName')) { const p = parseEntryName(val('eName')); $('#eDealer').value = p.dealer; if (!val('eHybrid')) $('#eHybrid').value = p.hybrid; const r = document.querySelector(`input[name="eType"][value="${p.type}"]`); if (r) r.checked = true; } });
+      const upd = () => {
+        const tmp = Object.assign({}, t, { entries: [{ id: 'x', order: 1, type: 'entry', moisture: num(val('eMoist')), weight: num(val('eWt')), length: num(val('eLen')), testWeight: null }] });
+        const x = trialCalc(tmp).E[0];
+        $('#eCalc').textContent = x.yld != null ? `${nf(x.dryBu, 1)} dry bu from ${nf(x.acres, 3)} ac = ${nf(x.yld, 1)} bu/ac at ${nf(num(t.stdMoisture) ?? 15, 1)}% moisture` : 'Enter moisture and harvest weight to calculate dry yield.';
+      };
+      ['eMoist', 'eWt', 'eLen'].forEach(x => $('#' + x).addEventListener('input', upd)); upd();
+    },
+    onSubmit: () => {
+      const name = val('eName'); if (!name) return 'Enter the entry name.';
+      const m = num(val('eMoist')); if (m != null && (m < 0 || m >= 60)) return 'Moisture should be a percent between 0 and 60.';
+      const data = { name, order: Math.max(1, Math.round(num(val('eOrder')) || 1)), type: radio('eType') || 'entry', dealer: val('eDealer'), hybrid: val('eHybrid'), moisture: m, testWeight: num(val('eTw')), weight: num(val('eWt')), length: num(val('eLen')), notes: val('eNotes') };
+      if (e) Object.assign(e, data); else t.entries.push(Object.assign({ id: uid('e') }, data));
+      commit(); toast(e ? 'Strip saved' : 'Strip added');
+    } });
+}
+function openTrialImportModal(preset = {}) {
+  const preField = preset.fieldId || (UI.field !== 'all' ? UI.field : '');
+  let parsed = null;
+  openModal({ title: 'Import a trial sheet', submitLabel: 'Import', wide: true,
+    body: `<div class="form-grid">
+      <p class="span-2 small muted">Use a sheet laid out like your hybrid plot: entry names in the first column and a header row with Moisture, Test Weight, Harvest Weight and Length. In Google Sheets, choose File → Download → CSV, or select the cells, copy and paste them below. This page can't read a Google Sheets link directly.</p>
+      <div class="fld span-2"><label for="kFile">CSV file</label><input id="kFile" type="file" accept=".csv,.tsv,.txt,text/csv,text/plain"></div>
+      <div class="fld span-2"><label for="kPaste">Or paste the cells</label><textarea id="kPaste" rows="4" placeholder="Paste from Google Sheets or Excel"></textarea></div>
+      <div class="fld"><label for="kYear">Season</label>${yearSelect('kYear', UI.year)}</div>
+      <div class="fld"><label for="kField">Field</label><select id="kField"><option value="">Not linked to a field</option>${S.fields.map(f => `<option value="${esc(f.id)}"${f.id === preField ? ' selected' : ''}>${esc(f.name)}</option>`).join('')}</select></div>
+      <div class="fld"><label for="kStd">Standard moisture</label>${unitField('kStd', 15, '%')}</div>
+      <div class="fld"><label for="kRows">Rows harvested per strip</label>${unitField('kRows', 8, 'rows')}</div>
+      <div class="fld"><label for="kSpace">Row spacing</label>${unitField('kSpace', 30, 'in')}</div>
+      <div class="calc" id="kPrev" aria-live="polite">Choose a file or paste the cells to see what will be imported.</div>
+    </div>`,
+    onOpen: () => {
+      const show = text => {
+        const r = parseTrialSheet(text); parsed = r.error ? null : r;
+        $('#kPrev').innerHTML = r.error ? esc(r.error) : r.trials.map(x => `<div><b>${esc(x.name)}</b>: ${x.entries.length} strips, ${x.entries.filter(e => e.weight != null).length} with harvest weight, ${x.entries.filter(e => e.type === 'check').length} checks · strip length ${x.stripLength != null ? nf(x.stripLength, 1) + ' ft' : 'not found'}</div>`).join('');
+      };
+      $('#kPaste').addEventListener('input', () => show($('#kPaste').value));
+      $('#kFile').addEventListener('change', ev => { const file = ev.target.files && ev.target.files[0]; if (!file) return; const rd = new FileReader(); rd.onload = () => { $('#kPaste').value = String(rd.result); show(String(rd.result)); }; rd.readAsText(file); });
+    },
+    onSubmit: () => {
+      if (!parsed) return 'Choose a CSV file or paste the cells first.';
+      const opts = { year: +val('kYear'), fieldId: val('kField') || null, rows: num(val('kRows')), rowSpacing: num(val('kSpace')), stdMoisture: num(val('kStd')) ?? 15 };
+      const made = parsed.trials.map(x => makeTrial(x, opts));
+      S.trials.push(...made); UI.trialId = made[0].id; UI.year = opts.year;
+      commit(); toast(`Imported ${made.length} trial${made.length > 1 ? 's' : ''}`);
+      if (UI.tab !== 'trials') location.hash = '#trials';
+    } });
+}
+
 /* ================= Actions & events ================= */
 const ACTIONS = {
   goto: id => { if (location.hash !== '#' + id) location.hash = '#' + id; else { UI.tab = id; render(); } window.scrollTo(0, 0); },
   'set-year': id => { UI.year = +id; render(); window.scrollTo(0, 0); },
   'clear-filters': () => { UI.crop = 'all'; UI.field = 'all'; render(); },
   'dismiss-banner': () => { UI.bannerDismissed = true; render(); },
-  'start-empty': () => confirmModal({ title: 'Start with an empty farm?', text: 'This removes every field, season, input, observation and rain reading saved in this browser. Download a JSON backup first if you want to keep anything.', okLabel: 'Remove everything',
-    onOk: () => { S = emptyState(); UI.crop = 'all'; UI.field = 'all'; UI.year = new Date().getFullYear(); UI.bannerDismissed = true; commit(); toast('Empty farm ready. Add your first field.'); ACTIONS.goto('fields'); } }),
+  'start-empty': () => confirmModal({ title: 'Start with an empty farm?', text: 'This removes every field, season, input, observation and rain reading saved in this browser. Hybrid trials are kept. Download a JSON backup first if you want to keep anything.', okLabel: 'Remove everything',
+    onOk: () => { const keep = S.trials || []; S = emptyState(); S.trials = keep; UI.crop = 'all'; UI.field = 'all'; UI.year = new Date().getFullYear(); UI.bannerDismissed = true; commit(); toast('Empty farm ready. Add your first field.'); ACTIONS.goto('fields'); } }),
   'reset-sample': () => confirmModal({ title: 'Reset to sample data?', text: 'This replaces everything saved in this browser with the sample farm.', okLabel: 'Reset to sample',
     onOk: () => { S = buildSample(); UI.crop = 'all'; UI.field = 'all'; UI.year = defaultYear(); UI.bannerDismissed = false; commit(); toast('Sample data restored'); } }),
   'open-data': () => openDataModal(),
@@ -1937,7 +2306,7 @@ const ACTIONS = {
   'del-field': id => { const f = fieldById(id); if (!f) return;
     const np = S.plantings.filter(p => p.fieldId === id).length, ni = S.inputs.filter(x => x.fieldId === id).length, no = S.observations.filter(x => x.fieldId === id).length, nr = S.rainfall.filter(x => x.fieldId === id).length;
     confirmModal({ title: `Delete ${f.name}?`, text: `This also deletes its ${np} seasons, ${ni} input entries, ${no} observations and ${nr} rain readings from its own gauge.`, okLabel: 'Delete field',
-      onOk: () => withUndo(`Deleted ${f.name}`, () => { S.fields = S.fields.filter(x => x.id !== id); S.plantings = S.plantings.filter(x => x.fieldId !== id); S.inputs = S.inputs.filter(x => x.fieldId !== id); S.observations = S.observations.filter(x => x.fieldId !== id); S.rainfall = S.rainfall.filter(x => x.fieldId !== id); if (UI.field === id) UI.field = 'all'; }) }); },
+      onOk: () => withUndo(`Deleted ${f.name}`, () => { S.fields = S.fields.filter(x => x.id !== id); S.plantings = S.plantings.filter(x => x.fieldId !== id); S.inputs = S.inputs.filter(x => x.fieldId !== id); S.observations = S.observations.filter(x => x.fieldId !== id); S.rainfall = S.rainfall.filter(x => x.fieldId !== id); (S.trials || []).forEach(t => { if (t.fieldId === id) t.fieldId = null; }); if (UI.field === id) UI.field = 'all'; }) }); },
   'edit-planting': id => openPlantingModal(id, UI.year),
   'del-planting': id => { const p = S.plantings.find(x => x.id === id); if (!p) return; closeModal(); withUndo(`Removed ${cropById(p.cropId).name} from ${(fieldById(p.fieldId) || {}).name} ${p.year}`, () => { S.plantings = S.plantings.filter(x => x.id !== id); }); },
   harvest: id => openHarvestModal(id),
@@ -1958,6 +2327,20 @@ const ACTIONS = {
   'compare-metric': id => { UI.compareMetric = id; render(); },
   'more-inputs': () => { UI.showAllInputs = true; render(); },
   'more-rain': () => { UI.showAllRain = true; render(); },
+  'import-trial': () => openTrialImportModal(),
+  'add-trial': () => openTrialModal(null),
+  'edit-trial': id => openTrialModal(id),
+  'del-trial': id => { const t = S.trials.find(x => x.id === id); if (!t) return; confirmModal({ title: `Delete ${t.name}?`, text: `This deletes the trial and its ${t.entries.length} strips.`, okLabel: 'Delete trial',
+    onOk: () => withUndo(`Deleted ${t.name}`, () => { S.trials = S.trials.filter(x => x.id !== id); }) }); },
+  'trial-sort': id => { UI.trialSort = id; render(); },
+  'add-entry': id => openEntryModal(null, id),
+  'edit-entry': id => openEntryModal(id),
+  'open-trial': id => { const t = (S.trials || []).find(x => x.id === id); if (!t) return; UI.trialId = id; UI.year = t.year; UI.trialSort = 'order'; if (UI.field !== 'all' && t.fieldId && t.fieldId !== UI.field) UI.field = 'all'; ACTIONS.goto('trials'); },
+  'field-add-trial': id => openFieldTrialChooser(id),
+  'field-trial-import': id => openTrialImportModal({ fieldId: id }),
+  'field-trial-new': id => { const f = fieldById(id); openTrialModal(null, { fieldId: id, name: f ? `${f.name} plot` : '' }); },
+  'field-trial-link': id => { const [fid, tid] = String(id).split('|'); const t = (S.trials || []).find(x => x.id === tid), f = fieldById(fid); if (!t || !f) return; closeModal(); t.fieldId = fid; commit(); toast(`${t.name} is now on ${f.name}`); },
+  'del-entry': id => { const { t, e } = findEntry(id); if (!e) return; withUndo(`Deleted strip ${e.order} (${e.name})`, () => { t.entries = t.entries.filter(x => x.id !== e.id); }); },
 };
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
@@ -1972,6 +2355,7 @@ document.addEventListener('change', e => {
   else if (id === 'cmpField') { UI.compareField = e.target.value; render(); }
   else if (id === 'inCat') { UI.inputCat = e.target.value; UI.showAllInputs = false; render(); }
   else if (id === 'obsIssue') { UI.obsIssue = e.target.value; render(); }
+  else if (id === 'trialSel') { UI.trialId = e.target.value; render(); }
 });
 document.addEventListener('submit', e => {
   if (e.target.id !== 'rainQuick') return;
