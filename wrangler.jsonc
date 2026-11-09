@@ -1,0 +1,12 @@
+{
+  // School Farm site: static files from the repo root plus the shared-records API in src/worker.js.
+  // Cloudflare Workers Builds deploys this on every push to main.
+  "name": "school-farm-data",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": ".", "binding": "ASSETS" },
+  "durable_objects": {
+    "bindings": [{ "name": "FARM", "class_name": "FarmStore" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["FarmStore"] }]
+}

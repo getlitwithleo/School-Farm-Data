@@ -471,6 +471,27 @@ tr.blank-row td { color: var(--muted); }
   .wx-day { flex: 0 0 100px; scroll-snap-align: start; }
 }
 
+
+/* Sharing status */
+.header-actions { display: flex; align-items: center; gap: 10px; flex: none; }
+.sync-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--header-ink) 30%, transparent); background: transparent; color: var(--header-ink); font: 600 14px var(--font-body); cursor: pointer; white-space: nowrap; }
+.sync-chip i { width: 9px; height: 9px; border-radius: 50%; background: var(--header-muted); flex: none; }
+.sync-chip.ok i { background: #3fb950; }
+.sync-chip.wait i { background: #f2b705; }
+.sync-chip.warn i { background: #ec835a; }
+.sync-chip.lock i { background: transparent; box-shadow: inset 0 0 0 2px var(--header-ink); border-radius: 2px; }
+.hdr-short { display: none; }
+.steps { margin: 8px 0 0; padding-left: 20px; font-size: 14.5px; display: flex; flex-direction: column; gap: 4px; }
+.hist { list-style: none; margin: 8px 0 0; padding: 0; max-height: 220px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; }
+.hist li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 2px 4px 2px 12px; border-top: 1px solid var(--line); font-size: 14px; }
+.hist li:first-child { border-top: 0; }
+@media (max-width: 720px) {
+  .hdr-long { display: none; }
+  .hdr-short { display: inline; }
+  .sync-chip { padding: 0 10px; font-size: 13px; }
+  .header-actions { gap: 6px; }
+}
+
 /* ---- School Farm look: emblem blue + corn gold, record-book styling ---- */
 :root {
   --blue: #1b4f8f; --blue-deep: #12355f; --gold: #f2b705; --gold-ink: #5a4300;
@@ -556,10 +577,13 @@ th.num { font-family: var(--font-body); }
         <div class="brand-farm" id="farmName">Field &amp; crop records</div>
       </div>
     </div>
+    <div class="header-actions">
+    <button type="button" id="syncChip" class="sync-chip" data-act="open-data" hidden></button>
     <button class="btn btn-header" type="button" data-act="open-data">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v3h16v-3"/></svg>
-      Data &amp; export
+      <span class="hdr-long">Data &amp; export</span><span class="hdr-short">Data</span>
     </button>
+    </div>
   </div>
   <nav class="tabs" role="tablist" aria-label="Sections" id="tabs"></nav>
 </header>
@@ -900,6 +924,10 @@ function loadState() {
   return buildSample();
 }
 function save() {
+  localSave();
+  if (SYNC.canEdit && SYNC.configured && !SYNC.empty && !['off', 'connecting', 'unconfigured'].includes(SYNC.mode)) { SYNC.dirty = true; syncStore(); schedulePush(); renderSyncChip(); }
+}
+function localSave() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); storageOk = true; lastSaved = new Date(); }
@@ -1010,6 +1038,7 @@ const fieldOptions = (sel, { all = false, farm = false } = {}) =>
   S.fields.map(f => `<option value="${esc(f.id)}"${f.id === sel ? ' selected' : ''}>${esc(f.name)} (${nf(f.acres)} ac)</option>`).join('');
 
 function renderShell() {
+  renderSyncChip();
   { const fn = (S.settings.farmName || '').trim(); $('#farmName').textContent = (!fn || /^(school farm|my farm|willow creek farm)$/i.test(fn)) ? 'Field & crop records' : fn; }
   const tabBtn = (t, cls) => `<button type="button" class="${cls}" role="tab" data-act="goto" data-id="${t.id}" aria-selected="${UI.tab === t.id}">${cls === 'tab' ? '' : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${t.icon}</svg>`}${esc(cls === 'tab' ? t.label : (t.short || t.label))}</button>`;
   $('#tabs').innerHTML = TABS.map(t => tabBtn(t, 'tab')).join('');
@@ -1610,6 +1639,7 @@ function closeModal() {
   const root = $('#modalRoot'); if (!root.classList.contains('open')) return;
   root.classList.remove('open'); root.innerHTML = ''; document.body.classList.remove('modal-open');
   if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
+  if (SYNC.deferred) { SYNC.deferred = false; setTimeout(syncPoll, 50); }
 }
 function confirmModal({ title, text, okLabel = 'Delete', onOk }) {
   openModal({ title, body: `<p>${esc(text)}</p>`, submitLabel: okLabel, danger: true, onSubmit: () => { onOk(); } });
@@ -1968,14 +1998,15 @@ function importText(text) {
   try { d = JSON.parse(text); } catch (e) { return 'That file isn\'t valid JSON. Use a file exported from this tracker.'; }
   if (d && d.data && Array.isArray(d.data.fields)) d = d.data;
   if (!d || !Array.isArray(d.fields)) return 'That JSON doesn\'t look like a tracker export: it has no fields list.';
+  if (needsPasscode()) { openUnlockModal(openDataModal); return null; }
   const n = normalize(d);
-  confirmModal({ title: 'Replace all data?', text: `The file has ${n.fields.length} fields, ${n.plantings.length} seasons, ${n.inputs.length} input entries, ${n.observations.length} observations and ${n.rainfall.length} rain readings. Importing replaces everything saved in this browser now.`, okLabel: 'Import and replace',
+  confirmModal({ title: 'Replace all data?', text: `The file has ${n.fields.length} fields, ${n.plantings.length} seasons, ${n.inputs.length} input entries, ${n.observations.length} observations and ${n.rainfall.length} rain readings. Importing replaces everything saved in this browser now.${everyone()}`, okLabel: 'Import and replace',
     onOk: () => { S = n; S.sample = false; UI.crop = 'all'; UI.field = 'all'; UI.year = defaultYear(); UI.bannerDismissed = true; commit(); toast('Import complete'); } });
   return null;
 }
 function openDataModal() {
   openModal({ title: 'Data & export', noSubmit: true, wide: true,
-    body: `<div class="data-sec"><h3>Farm name</h3><div style="display:flex;gap:8px"><label class="sr-only" for="dFarm">Farm name</label><input id="dFarm" type="text" value="${esc(S.settings.farmName)}" autocomplete="off"><button type="button" class="btn" data-act="save-farm">Save</button></div></div>
+    body: `${syncSectionHtml()}<div class="data-sec"><h3>Farm name</h3><div style="display:flex;gap:8px"><label class="sr-only" for="dFarm">Farm name</label><input id="dFarm" type="text" value="${esc(S.settings.farmName)}" autocomplete="off"><button type="button" class="btn" data-act="save-farm">Save</button></div></div>
       <div class="data-sec"><h3>Forecast location</h3><p class="small muted">The dashboard forecast is for ${esc((WX && WX.place) || wxLoc().name || 'the farm')} (${wxLoc().lat}, ${wxLoc().lon}). Enter the farm's latitude and longitude, or use this device's location while you're standing at the farm.</p>
         <div class="form-grid"><div class="fld"><label for="wxLat">Latitude</label><input id="wxLat" type="number" inputmode="decimal" step="any" value="${wxLoc().lat}"></div><div class="fld"><label for="wxLon">Longitude</label><input id="wxLon" type="number" inputmode="decimal" step="any" value="${wxLoc().lon}"></div></div>
         <div class="btn-row"><button type="button" class="btn" data-act="save-wx-loc">Save location</button><button type="button" class="btn btn-ghost" data-act="wx-geo">Use this device's location</button></div><p id="wxMsg" class="small" role="status"></p></div>
@@ -1988,7 +2019,7 @@ function openDataModal() {
         <div class="fld"><label for="dPaste">Or paste JSON</label><textarea id="dPaste" rows="3" placeholder='{"app":"farm-field-tracker", ...}'></textarea></div>
         <div class="btn-row"><button type="button" class="btn" data-act="import-paste">Import pasted JSON</button></div><p id="importMsg" class="form-error" role="status"></p></div>
       <div class="data-sec"><h3>Reset</h3><div class="btn-row"><button type="button" class="btn" data-act="reset-sample">Reset to sample data</button><button type="button" class="btn btn-ghost danger" data-act="start-empty">Start with an empty farm</button></div>
-        <p class="small muted">${storageOk ? 'Changes save automatically in this browser (localStorage). They stay on this device only, so export a JSON backup to move data between your phone and computer.' : 'This browser is blocking storage, so changes are lost when the page closes. Export a JSON backup.'}</p></div>`,
+        <p class="small muted">${SYNC.configured && SYNC.mode !== 'off' ? 'Records are shared with every device through the farm\'s site. This browser also keeps a copy so the site keeps working without a connection.' : storageOk ? 'Changes save automatically in this browser (localStorage). They stay on this device only, so export a JSON backup to move data between your phone and computer.' : 'This browser is blocking storage, so changes are lost when the page closes. Export a JSON backup.'}</p></div>`,
     onOpen: () => {
       $('#dFile').addEventListener('change', e => { const file = e.target.files && e.target.files[0]; if (!file) return; const rd = new FileReader(); rd.onload = () => { const err = importText(String(rd.result)); if (err) $('#importMsg').textContent = err; }; rd.onerror = () => { $('#importMsg').textContent = 'Couldn\'t read that file.'; }; rd.readAsText(file); });
     } });
@@ -2481,15 +2512,204 @@ function forecastCard() {
     <p class="wx-foot">National Weather Service forecast for ${esc(WX.place || 'the farm')} · issued ${esc(updated.toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit' }))} · checks again every hour${WX.failed ? ' · last check failed, showing the saved forecast' : ''} · <button type="button" class="linkish" data-act="open-data">Change location</button></p>`);
 }
 
+
+/* ================= Shared records (one copy for every device, kept by the site's Cloudflare Worker) ================= */
+const SYNC_KEY = 'farmFieldTracker.sync.v1', PRESHARE_KEY = 'farmFieldTracker.beforeShared.v1';
+const SYNC = { mode: /^https?:/.test(location.protocol) ? 'connecting' : 'off', configured: false, empty: false, version: 0, base: null, dirty: false,
+  passcode: '', canEdit: false, savedAt: null, pushing: false, again: false, timer: null, error: '', deferred: false, initOk: false };
+const SYNC_COLLS = ['crops', 'fields', 'plantings', 'inputs', 'observations', 'rainfall', 'trials'];
+const EDIT_ACTS = new Set(['add-field', 'edit-field', 'del-field', 'edit-planting', 'del-planting', 'harvest', 'clear-harvest', 'add-crop', 'edit-crop', 'del-crop',
+  'add-input', 'edit-input', 'del-input', 'add-obs', 'edit-obs', 'del-obs', 'edit-rain', 'del-rain', 'import-trial', 'add-trial', 'edit-trial', 'del-trial',
+  'add-entry', 'edit-entry', 'del-entry', 'field-add-trial', 'field-trial-import', 'field-trial-new', 'field-trial-link', 'start-empty', 'reset-sample',
+  'save-farm', 'import-paste', 'save-wx-loc', 'sync-init']);
+const IN_DATA_MODAL = new Set(['save-farm', 'import-paste', 'save-wx-loc', 'sync-init', 'start-empty', 'reset-sample']);
+const plain = o => JSON.parse(JSON.stringify(o));
+const needsPasscode = () => SYNC.configured && !SYNC.canEdit && !['off', 'connecting'].includes(SYNC.mode);
+const everyone = () => SYNC.configured && SYNC.mode !== 'off' ? ' This changes the shared records on every device. Earlier versions can be downloaded under Data & export → Sharing.' : '';
+function syncLoad() {
+  try { const d = JSON.parse(localStorage.getItem(SYNC_KEY) || 'null'); if (d) Object.assign(SYNC, { version: d.version || 0, base: d.base || null, dirty: !!d.dirty, passcode: d.passcode || '', savedAt: d.savedAt || null }); } catch (e) { /* first visit */ }
+}
+function syncStore() {
+  try { localStorage.setItem(SYNC_KEY, JSON.stringify({ version: SYNC.version, base: SYNC.base, dirty: SYNC.dirty, passcode: SYNC.passcode, savedAt: SYNC.savedAt })); } catch (e) { /* storage full or blocked */ }
+}
+async function syncApi(path, opts = {}) {
+  const headers = Object.assign({ 'content-type': 'application/json' }, opts.headers || {});
+  if (SYNC.passcode && !headers['x-farm-passcode']) headers['x-farm-passcode'] = SYNC.passcode;
+  const r = await fetch(path, Object.assign({ cache: 'no-store' }, opts, { headers }));
+  let body = null; try { body = await r.json(); } catch (e) { /* not JSON */ }
+  return { status: r.status, ok: r.ok, body };
+}
+// Three-way merge by record id: changes made on this device win, other devices' changes are kept.
+function merge3(base, local, remote) {
+  base = base || {}; remote = remote || {};
+  const out = plain(remote);
+  for (const k of SYNC_COLLS) {
+    const B = new Map((base[k] || []).map(x => [x.id, JSON.stringify(x)]));
+    const L = new Map((local[k] || []).map(x => [x.id, x]));
+    const result = new Map((remote[k] || []).map(x => [x.id, x]));
+    for (const [id, x] of L) { const b = B.get(id); if (b === undefined || b !== JSON.stringify(x)) result.set(id, x); }
+    for (const id of B.keys()) if (!L.has(id)) result.delete(id);
+    out[k] = [...result.values()];
+  }
+  const bs = base.settings || {}, ls = local.settings || {};
+  out.settings = Object.assign({}, remote.settings || {});
+  for (const key of Object.keys(ls)) if (JSON.stringify(ls[key]) !== JSON.stringify(bs[key])) out.settings[key] = ls[key];
+  return out;
+}
+function fixUI() {
+  if (UI.field !== 'all' && !fieldById(UI.field)) UI.field = 'all';
+  if (UI.crop !== 'all' && !S.crops.some(c => c.id === UI.crop)) UI.crop = 'all';
+  if (!allYears().includes(UI.year)) UI.year = defaultYear();
+}
+function applyRemote(body) {
+  SYNC.savedAt = body.savedAt || SYNC.savedAt;
+  if (!body.version) { SYNC.empty = true; SYNC.version = 0; return false; }
+  SYNC.empty = false;
+  if (body.unchanged || !body.data) return false;
+  if (!SYNC.base && !SYNC.version && !S.sample && S.fields.length) { try { localStorage.setItem(PRESHARE_KEY, JSON.stringify(S)); } catch (e) { /* no room */ } }
+  if (SYNC.dirty && SYNC.canEdit) S = normalize(merge3(SYNC.base, plain(S), body.data));
+  else { S = normalize(body.data); SYNC.dirty = false; }
+  SYNC.base = body.data; SYNC.version = body.version;
+  if (applyMarket() && SYNC.canEdit) SYNC.dirty = true;
+  fixUI(); localSave(); syncStore();
+  return true;
+}
+function schedulePush(delay = 800) { clearTimeout(SYNC.timer); SYNC.timer = setTimeout(() => syncPush(0), delay); }
+async function syncPush(attempt) {
+  if (!SYNC.canEdit || !SYNC.configured || (SYNC.empty && !SYNC.initOk)) return;
+  if (SYNC.pushing) { SYNC.again = true; return; }
+  SYNC.pushing = true; renderSyncChip();
+  const sending = plain(S);
+  try {
+    const r = await syncApi('/api/state', { method: 'PUT', body: JSON.stringify({ baseVersion: SYNC.version, data: sending }) });
+    if (r.status === 200 && r.body) {
+      Object.assign(SYNC, { version: r.body.version, savedAt: r.body.savedAt, base: sending, empty: false, initOk: false, mode: 'on', error: '' });
+      SYNC.dirty = JSON.stringify(plain(S)) !== JSON.stringify(sending);
+    } else if (r.status === 409 && r.body) {
+      S = normalize(merge3(SYNC.base, plain(S), r.body.data));
+      Object.assign(SYNC, { base: r.body.data, version: r.body.version, savedAt: r.body.savedAt, dirty: true });
+      fixUI(); localSave();
+      if (!$('#modalRoot').classList.contains('open')) render();
+      if (attempt < 3) { SYNC.pushing = false; return syncPush(attempt + 1); }
+    } else if (r.status === 401) {
+      Object.assign(SYNC, { canEdit: false, passcode: '', mode: 'readonly', error: 'The farm passcode was changed. Enter the new passcode to keep saving from this device.' });
+      toast('Passcode needed: changes are kept on this device until you enter it');
+    } else if (r.status === 503) {
+      Object.assign(SYNC, { configured: false, mode: 'unconfigured' });
+    } else { SYNC.mode = 'offline'; }
+  } catch (e) { SYNC.mode = 'offline'; }
+  SYNC.pushing = false; syncStore(); renderSyncChip();
+  if (SYNC.again) { SYNC.again = false; schedulePush(300); }
+  else if (SYNC.dirty && SYNC.mode === 'on') schedulePush(1500);
+}
+async function syncPoll() {
+  if (SYNC.mode === 'off' || SYNC.mode === 'connecting' || SYNC.pushing || document.hidden) return;
+  if ($('#modalRoot').classList.contains('open')) { SYNC.deferred = true; return; }
+  try {
+    const r = await syncApi('/api/state?known=' + SYNC.version);
+    if (!r.ok || !r.body) throw new Error('poll failed');
+    SYNC.configured = !!r.body.configured;
+    if (SYNC.mode === 'offline' || SYNC.mode === 'unconfigured') SYNC.mode = !SYNC.configured ? 'unconfigured' : SYNC.canEdit ? 'on' : 'readonly';
+    if ($('#modalRoot').classList.contains('open')) { SYNC.deferred = true; return; }
+    if (applyRemote(r.body)) { render(); toast('Updated with changes from another device'); }
+    if (SYNC.dirty && SYNC.canEdit) schedulePush(0);
+  } catch (e) { if (SYNC.mode !== 'off') SYNC.mode = 'offline'; }
+  renderSyncChip();
+}
+async function syncStart() {
+  if (SYNC.mode === 'off') return;
+  syncLoad();
+  try {
+    const r = await syncApi('/api/state');
+    if (!r.ok || !r.body || r.body.version === undefined) { SYNC.mode = 'off'; renderSyncChip(); return; }
+    SYNC.configured = !!r.body.configured;
+    SYNC.canEdit = SYNC.configured && !!SYNC.passcode;
+    SYNC.mode = !SYNC.configured ? 'unconfigured' : SYNC.canEdit ? 'on' : 'readonly';
+    if (SYNC.configured) applyRemote(r.body);
+    if (SYNC.dirty && SYNC.canEdit) schedulePush(0);
+  } catch (e) { SYNC.mode = SYNC.base ? 'offline' : 'off'; }
+  if (!$('#modalRoot').classList.contains('open')) render(); else renderSyncChip();
+  setInterval(syncPoll, 30000);
+  window.addEventListener('online', syncPoll);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) syncPoll(); });
+}
+function renderSyncChip() {
+  const el = $('#syncChip'); if (!el) return;
+  const m = SYNC.mode;
+  if (m === 'off') { el.hidden = true; return; }
+  let long, short, cls;
+  if (m === 'connecting') { long = 'Connecting…'; short = 'Connecting'; cls = 'wait'; }
+  else if (m === 'unconfigured') { long = 'Not shared yet: set a passcode'; short = 'Not shared'; cls = 'warn'; }
+  else if (m === 'offline') { long = SYNC.dirty ? 'Offline, changes will sync' : 'Offline'; short = 'Offline'; cls = 'warn'; }
+  else if (SYNC.empty) { long = 'Shared farm not started'; short = 'Not started'; cls = 'warn'; }
+  else if (m === 'readonly') { long = 'View only: tap to edit'; short = 'View only'; cls = 'lock'; }
+  else if (SYNC.pushing || SYNC.dirty) { long = 'Saving…'; short = 'Saving'; cls = 'wait'; }
+  else { long = 'Shared, all saved'; short = 'Saved'; cls = 'ok'; }
+  el.hidden = false; el.className = 'sync-chip ' + cls; el.dataset.act = m === 'readonly' && !SYNC.empty ? 'sync-unlock' : 'open-data';
+  el.innerHTML = `<i aria-hidden="true"></i><span class="hdr-long">${esc(long)}</span><span class="hdr-short">${esc(short)}</span>`;
+  el.setAttribute('aria-label', `${long}. Open sharing settings`);
+}
+function openUnlockModal(after) {
+  openModal({ title: 'Enter the farm passcode', submitLabel: 'Unlock editing',
+    body: `<p>Anyone with the link can view the School Farm records. To add or change records from this device, enter the farm passcode. This device remembers it until you lock it again.</p>
+      <div class="fld" style="margin-top:14px"><label for="pcIn">Farm passcode</label><input id="pcIn" type="password" autocomplete="current-password"></div>`,
+    onSubmit: () => { const pc = val('pcIn'); if (!pc) return 'Enter the passcode.'; unlockWith(pc, after); return false; } });
+}
+async function unlockWith(pc, after) {
+  const err = $('#mErr'); if (err) err.textContent = 'Checking…';
+  try {
+    const r = await syncApi('/api/unlock', { method: 'POST', headers: { 'x-farm-passcode': pc } });
+    if (r.ok) {
+      Object.assign(SYNC, { passcode: pc, canEdit: true, mode: SYNC.mode === 'offline' ? 'offline' : 'on', error: '' }); syncStore();
+      closeModal(); toast('Editing unlocked on this device'); renderSyncChip();
+      if (after) setTimeout(after, 60);
+    } else if (err) err.textContent = r.status === 401 ? 'That passcode isn\'t right.' : r.status === 429 ? 'Too many wrong passcodes. Try again in 15 minutes.' : r.status === 503 ? 'Shared saving isn\'t turned on yet.' : 'Couldn\'t check the passcode. Try again.';
+  } catch (e) { if (err) err.textContent = 'No connection. Try again when this device is online.'; }
+}
+function syncSectionHtml() {
+  const m = SYNC.mode;
+  const backup = (() => { try { return !!localStorage.getItem(PRESHARE_KEY); } catch (e) { return false; } })()
+    ? '<p class="small">This device\'s records from before sharing were kept. <button type="button" class="linkish" data-act="sync-local-backup">Download them</button></p>' : '';
+  if (m === 'off') return `<div class="data-sec"><h3>Sharing</h3><p class="small muted">Records are saved in this browser only.</p>${backup}</div>`;
+  let body = '';
+  if (m === 'connecting') body = '<p>Connecting to the shared farm…</p>';
+  else if (!SYNC.configured && m !== 'offline') {
+    body = `<p>Shared saving is ready to turn on. Records are saved on this device only until a farm passcode is set. The first passcode set here controls editing, so the farm manager should set it now.</p>
+      <div class="form-grid" style="margin-top:6px"><div class="fld"><label for="spNew">Farm passcode</label><input id="spNew" type="password" autocomplete="new-password"></div>
+      <div class="fld"><label for="spNew2">Type it again</label><input id="spNew2" type="password" autocomplete="new-password"></div></div>
+      <div class="btn-row"><button type="button" class="btn btn-primary" data-act="sync-setup">Set passcode and turn on sharing</button></div><p id="spMsg" class="form-error" role="status"></p>
+      <p class="small muted">At least 4 characters. Capital letters don't matter. The passcode is stored only on the farm's site, not in the GitHub repo.</p>`;
+  } else {
+    const when = SYNC.savedAt ? new Date(SYNC.savedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+    body = `<p>${m === 'offline' ? `Offline. ${SYNC.dirty ? 'Changes made on this device will sync when it reconnects.' : 'Showing the last records this device received.'}`
+      : SYNC.empty ? 'Shared saving is on, but the shared farm has no records yet.' : `Every device that opens this site sees the same records. Last saved ${esc(when)}.`}</p>`;
+    if (SYNC.canEdit) {
+      if (SYNC.empty) body += `<p class="small muted">Start it with the records on this device${S.sample ? '. This device is showing the sample farm, so use Start with an empty farm first if you want a blank farm' : ''}.</p>
+        <div class="btn-row"><button type="button" class="btn btn-primary" data-act="sync-init">Start the shared farm with this device's records</button></div>`;
+      body += `<p class="small muted">Editing is unlocked on this device.</p><div class="btn-row"><button type="button" class="btn sm" data-act="sync-history">Saved versions</button><button type="button" class="btn sm" data-act="sync-pass-form">Change passcode</button><button type="button" class="btn btn-ghost sm" data-act="sync-lock">Lock editing on this device</button></div><div id="syncHist"></div>
+        <div id="passForm" hidden><div class="form-grid" style="margin-top:10px"><div class="fld"><label for="cpNew">New passcode</label><input id="cpNew" type="password" autocomplete="new-password"></div><div class="fld"><label for="cpNew2">Type it again</label><input id="cpNew2" type="password" autocomplete="new-password"></div></div>
+        <div class="btn-row" style="margin-top:8px"><button type="button" class="btn btn-primary sm" data-act="sync-change-pass">Save new passcode</button></div><p class="small muted">Other devices will need the new passcode to keep editing.</p></div><p id="cpMsg" class="form-error" role="status"></p>`;
+    } else {
+      body += `<p class="small muted">Anyone with the link can view. To add or change records from this device, enter the farm passcode.</p><div class="btn-row"><button type="button" class="btn btn-primary" data-act="sync-unlock">Enter the farm passcode</button></div>`;
+    }
+    if (SYNC.error) body += `<p class="form-error">${esc(SYNC.error)}</p>`;
+  }
+  return `<div class="data-sec"><h3>Sharing</h3>${body}${backup}</div>`;
+}
+function downloadText(name, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' })), a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
 /* ================= Actions & events ================= */
 const ACTIONS = {
   goto: id => { if (location.hash !== '#' + id) location.hash = '#' + id; else { UI.tab = id; render(); } window.scrollTo(0, 0); },
   'set-year': id => { UI.year = +id; render(); window.scrollTo(0, 0); },
   'clear-filters': () => { UI.crop = 'all'; UI.field = 'all'; render(); },
   'dismiss-banner': () => { UI.bannerDismissed = true; render(); },
-  'start-empty': () => confirmModal({ title: 'Start with an empty farm?', text: 'This removes every field, season, input, observation and rain reading saved in this browser. Hybrid trials are kept. Download a JSON backup first if you want to keep anything.', okLabel: 'Remove everything',
+  'start-empty': () => confirmModal({ title: 'Start with an empty farm?', text: 'This removes every field, season, input, observation and rain reading saved in this browser. Hybrid trials are kept. Download a JSON backup first if you want to keep anything.' + everyone(), okLabel: 'Remove everything',
     onOk: () => { const keep = S.trials || []; S = emptyState(); S.trials = keep; UI.crop = 'all'; UI.field = 'all'; UI.year = new Date().getFullYear(); UI.bannerDismissed = true; commit(); toast('Empty farm ready. Add your first field.'); ACTIONS.goto('fields'); } }),
-  'reset-sample': () => confirmModal({ title: 'Reset to sample data?', text: 'This replaces everything saved in this browser with the sample farm.', okLabel: 'Reset to sample',
+  'reset-sample': () => confirmModal({ title: 'Reset to sample data?', text: 'This replaces everything saved in this browser with the sample farm.' + everyone(), okLabel: 'Reset to sample',
     onOk: () => { S = buildSample(); UI.crop = 'all'; UI.field = 'all'; UI.year = defaultYear(); UI.bannerDismissed = false; commit(); toast('Sample data restored'); } }),
   'open-data': () => openDataModal(),
   'save-farm': () => { const n = val('dFarm'); if (!n) return; S.settings.farmName = n; commit(); toast('Farm name saved'); },
@@ -2522,6 +2742,43 @@ const ACTIONS = {
   'compare-metric': id => { UI.compareMetric = id; render(); },
   'more-inputs': () => { UI.showAllInputs = true; render(); },
   'more-rain': () => { UI.showAllRain = true; render(); },
+  'sync-unlock': () => openUnlockModal(),
+  'sync-setup': async () => {
+    const a = val('spNew'), b2 = val('spNew2'), msg = $('#spMsg');
+    if (a.trim().length < 4) { msg.textContent = 'Use at least 4 characters.'; return; }
+    if (a.trim().toLowerCase() !== b2.trim().toLowerCase()) { msg.textContent = 'The two passcodes don\'t match.'; return; }
+    msg.textContent = 'Setting the passcode…';
+    try {
+      const r = await syncApi('/api/setup', { method: 'POST', body: JSON.stringify({ passcode: a }) });
+      if (r.ok) {
+        Object.assign(SYNC, { passcode: a, canEdit: true, configured: true, mode: 'on', empty: SYNC.version === 0, error: '' }); syncStore();
+        renderSyncChip(); openDataModal(); toast('Passcode set. Now start the shared farm.');
+      } else msg.textContent = r.status === 409 ? 'A passcode is already set. Reload the page and enter it to unlock editing.' : (r.body && r.body.message) || 'Couldn\'t set the passcode. Try again.';
+    } catch (e) { msg.textContent = 'No connection. Try again when this device is online.'; }
+  },
+  'sync-pass-form': () => { const f = $('#passForm'); if (f) { f.hidden = !f.hidden; if (!f.hidden) $('#cpNew').focus(); } },
+  'sync-change-pass': async () => {
+    const a = val('cpNew'), b2 = val('cpNew2'), msg = $('#cpMsg');
+    if (a.trim().length < 4) { msg.textContent = 'Use at least 4 characters.'; return; }
+    if (a.trim().toLowerCase() !== b2.trim().toLowerCase()) { msg.textContent = 'The two passcodes don\'t match.'; return; }
+    try {
+      const r = await syncApi('/api/passcode', { method: 'POST', body: JSON.stringify({ passcode: a }) });
+      if (r.ok) { SYNC.passcode = a; syncStore(); $('#passForm').hidden = true; msg.textContent = ''; toast('Passcode changed'); }
+      else msg.textContent = r.status === 409 ? 'This passcode is set in the Cloudflare dashboard. Change it there.' : r.status === 401 ? 'This device\'s passcode is out of date. Lock editing and unlock with the current passcode.' : 'Couldn\'t change the passcode. Try again.';
+    } catch (e) { msg.textContent = 'No connection. Try again when this device is online.'; }
+  },
+  'sync-lock': () => { Object.assign(SYNC, { passcode: '', canEdit: false, mode: SYNC.configured ? 'readonly' : SYNC.mode }); syncStore(); closeModal(); toast('Editing locked on this device'); renderSyncChip(); },
+  'sync-init': () => confirmModal({ title: 'Start the shared farm?', text: `Every device that opens the site will see this device's records: ${S.fields.length} fields, ${S.plantings.length} seasons, ${S.inputs.length} input entries and ${(S.trials || []).length} trials.`, okLabel: 'Start the shared farm',
+    onOk: () => { SYNC.initOk = true; SYNC.version = 0; SYNC.dirty = true; syncPush(0).then(() => { toast(SYNC.empty ? 'Couldn\'t start the shared farm. Try again.' : 'The shared farm is started'); render(); }); } }),
+  'sync-history': async () => {
+    const box = $('#syncHist'); if (!box) return; box.textContent = 'Loading…';
+    try { const r = await syncApi('/api/history'); if (!r.ok) throw new Error();
+      box.innerHTML = `<ul class="hist">${r.body.versions.map(v => `<li><span>${esc(new Date(v.savedAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))}${v.version === SYNC.version ? ' (current)' : ''}</span><button type="button" class="btn btn-ghost sm" data-act="sync-backup" data-id="${v.version}">Download</button></li>`).join('')}</ul><p class="small muted">To go back to an earlier version, download it, then use Import JSON.</p>`;
+    } catch (e) { box.textContent = 'Couldn\'t load the saved versions.'; } },
+  'sync-backup': async id => {
+    try { const r = await fetch('/api/backup?version=' + encodeURIComponent(id), { headers: { 'x-farm-passcode': SYNC.passcode }, cache: 'no-store' }); if (!r.ok) throw new Error();
+      downloadText(`school-farm-shared-v${id}.json`, await r.text()); toast('Downloading the saved version'); } catch (e) { toast('Couldn\'t download that version'); } },
+  'sync-local-backup': () => { try { downloadText(`school-farm-this-device-before-sharing.json`, localStorage.getItem(PRESHARE_KEY) || '{}'); } catch (e) { toast('Couldn\'t read the saved copy'); } },
   'wx-refresh': () => loadForecast(true),
   'save-wx-loc': () => { const lat = num(val('wxLat')), lon = num(val('wxLon')); const msg = $('#wxMsg');
     if (lat == null || lon == null || lat < 17 || lat > 72 || lon < -180 || lon > -60) { msg.textContent = 'Enter a US latitude and longitude, like 43.0411 and -88.2371. The National Weather Service forecast covers US locations only.'; return; }
@@ -2547,8 +2804,10 @@ const ACTIONS = {
 };
 document.addEventListener('click', e => {
   const b = e.target.closest('[data-act]'); if (!b) return;
-  const fn = ACTIONS[b.dataset.act]; if (!fn) return;
-  e.preventDefault(); fn(b.dataset.id, b, e);
+  const act = b.dataset.act, fn = ACTIONS[act]; if (!fn) return;
+  e.preventDefault();
+  if (EDIT_ACTS.has(act) && needsPasscode()) { const id = b.dataset.id; openUnlockModal(IN_DATA_MODAL.has(act) ? openDataModal : () => fn(id, b, e)); return; }
+  fn(b.dataset.id, b, e);
 });
 document.addEventListener('change', e => {
   const id = e.target.id;
@@ -2563,6 +2822,7 @@ document.addEventListener('change', e => {
 document.addEventListener('submit', e => {
   if (e.target.id !== 'rainQuick') return;
   e.preventDefault();
+  if (needsPasscode()) { openUnlockModal(); return; }
   const date = val('rqDate'), inches = num(val('rqIn')), gauge = val('rqGauge');
   if (!date) { toast('Enter the date'); return; }
   if (inches == null || inches <= 0) { toast('Enter the rain in inches'); $('#rqIn').focus(); return; }
@@ -2606,7 +2866,8 @@ function onHash() {
   window.addEventListener('resize', () => { clearTimeout(rT); rT = setTimeout(() => { const b = window.innerWidth < 560; if (b !== wBucket) { wBucket = b; rerender(); } }, 250); });
   wxCacheLoad();
   onHash();
-  save();
+  localSave();
+  syncStart();
   loadMarket(); loadForecast();
   setInterval(() => loadForecast(true), 60 * 60000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { loadForecast(); loadMarket(); } });
