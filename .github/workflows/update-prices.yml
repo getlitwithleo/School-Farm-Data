@@ -19,14 +19,14 @@ jobs:
           node-version: 20
       - name: Fetch futures prices
         run: node scripts/update-prices.mjs
-      - name: Commit prices.json if it changed
+      - name: Commit the price files if they changed
         run: |
-          if git diff --quiet -- prices.json && git ls-files --error-unmatch prices.json >/dev/null 2>&1; then
+          git add prices.json price-history.json
+          if git diff --cached --quiet; then
             echo "No price change."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add prices.json
           git commit -m "Update market prices"
           git push

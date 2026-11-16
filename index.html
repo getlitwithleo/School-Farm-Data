@@ -503,6 +503,11 @@ tr.blank-row td { color: var(--muted); }
 .fx-chip span { font-size: 12px; color: var(--muted); }
 .fx-op:hover, .fx-chip:hover { border-color: var(--green); }
 
+/* Sales */
+.pct { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.pct-bar { width: 60px; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; display: inline-block; }
+.pct-bar i { display: block; height: 100%; background: var(--green); border-radius: 4px; }
+
 /* ---- School Farm look: emblem blue + corn gold, record-book styling ---- */
 :root {
   --blue: #1b4f8f; --blue-deep: #12355f; --gold: #f2b705; --gold-ink: #5a4300;
@@ -615,7 +620,7 @@ const TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: '<path d="M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z"/>' },
   { id: 'fields', label: 'Fields', icon: '<path d="M3 19c5-5 13-5 18 0M3 13c5-5 13-5 18 0M3 7c5-5 13-5 18 0"/>' },
   { id: 'inputs', label: 'Inputs', icon: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3"/>' },
-  { id: 'scouting', label: 'Scouting', icon: '<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5M10.5 7.5v6M7.5 10.5h6"/>' },
+  { id: 'sales', label: 'Sales', icon: '<path d="M12 3v18M16.5 7.5c0-1.7-2-3-4.5-3s-4.5 1.3-4.5 3 2 2.6 4.5 3 4.5 1.3 4.5 3-2 3-4.5 3-4.5-1.3-4.5-3"/>' },
   { id: 'yield', label: 'Yield & Profit', short: 'Yield', icon: '<path d="M4 20h16M7 16v-5M12 16V6M17 16v-8"/>' },
   { id: 'trials', label: 'Hybrid Trials', short: 'Trials', icon: '<rect x="3.5" y="3" width="4" height="18" rx="1"/><rect x="10" y="3" width="4" height="18" rx="1"/><rect x="16.5" y="3" width="4" height="18" rx="1"/>' },
 ];
@@ -896,10 +901,10 @@ function buildSample() {
     [2026, '2026-11-02', 'f5', 'GS9', 'other', 2, 'Grain at 19% moisture. Waiting on a hard freeze to dry down before harvest.'],
   ];
   const observations = OBS.map(([year, date, fieldId, stage, issue, severity, note]) => ({ id: uid('o'), year, date, fieldId, stage, issue, severity, note }));
-  return { version: 1, sample: true, settings: { farmName: 'School Farm' }, crops, fields, plantings, inputs, observations, rainfall, trials: seedTrials() };
+  return { version: 1, sample: true, settings: { farmName: 'School Farm' }, crops, fields, plantings, inputs, observations, rainfall, trials: seedTrials(), sales: SAMPLE_SALES.map(x => Object.assign({ id: uid('s') }, x)) };
 }
 function emptyState() {
-  return { version: 1, sample: false, settings: { farmName: 'School Farm' }, crops: defaultCrops(), fields: [], plantings: [], inputs: [], observations: [], rainfall: [], trials: [] };
+  return { version: 1, sample: false, settings: { farmName: 'School Farm' }, crops: defaultCrops(), fields: [], plantings: [], inputs: [], observations: [], rainfall: [], trials: [], sales: [] };
 }
 
 /* ================= Store ================= */
@@ -928,6 +933,7 @@ function normalize(d) {
   out.observations = (d.observations || []).map(o => ({ id: sid(o.id, 'o'), year: num(o.year) ?? (o.date ? +String(o.date).slice(0, 4) : new Date().getFullYear()), date: sdate(o.date),
     fieldId: sref(o.fieldId), stage: String(o.stage || ''), issue: ISSUES.some(x => x.id === o.issue) ? o.issue : 'other', severity: clamp(Math.round(num(o.severity) ?? 1), 1, 5), note: String(o.note || '') }));
   out.trials = Array.isArray(d.trials) ? d.trials.map(normTrial) : seedTrials();
+  out.sales = (d.sales || []).map(normSale);
   out.rainfall = (d.rainfall || []).map(r => ({ id: sid(r.id, 'r'), date: sdate(r.date), fieldId: sref(r.fieldId) || 'farm', inches: num(r.inches) ?? 0 })).filter(r => r.date);
   return out;
 }
@@ -973,10 +979,12 @@ const gaugeName = id => id === 'farm' ? 'Farm gauge' : ((fieldById(id) || {}).na
 
 function econ(p) {
   const crop = cropById(p.cropId), acres = pAcres(p);
-  const price = num(p.price) ?? crop.price, expY = num(p.expectedYield) ?? crop.expectedYield;
+  const mk = num(p.price) == null ? marketing(p.cropId, p.year) : null;
+  const price = num(p.price) ?? (mk && mk.blended != null ? mk.blended : crop.price), expY = num(p.expectedYield) ?? crop.expectedYield;
+  const priceFrom = num(p.price) != null ? 'typed' : mk && mk.blended != null ? 'sales' : 'market';
   const act = num(p.actualYield), harvested = act != null, yld = harvested ? act : expY;
   const cost = costFor(p.fieldId, p.year), revenue = yld * acres * price, net = revenue - cost;
-  return { p, crop, field: fieldById(p.fieldId), acres, price, expY, act, harvested, yld, cost, revenue, net,
+  return { p, crop, field: fieldById(p.fieldId), acres, price, priceFrom, expY, act, harvested, yld, cost, revenue, net,
     costAc: acres ? cost / acres : 0, revAc: acres ? revenue / acres : 0, netAc: acres ? net / acres : 0,
     bePrice: yld * acres ? cost / (yld * acres) : null, beYield: price * acres ? cost / (price * acres) : null,
     pct: harvested && expY ? act / expY : null };
@@ -1107,7 +1115,7 @@ function render() {
   let html = '';
   if (S.sample && !UI.bannerDismissed) html += `<div class="banner" role="status"><p>You're looking at sample data for a 548-acre farm. Edit anything, or start with an empty farm.</p><div class="btns"><button class="btn sm" data-act="start-empty">Start empty</button><button class="btn sm btn-ghost" data-act="dismiss-banner">Keep sample data</button></div></div>`;
   if (!storageOk) html += `<div class="banner warn" role="alert"><p>This browser isn't letting the page save. Your changes will be lost when you close it, so use Data &amp; export to download a JSON backup.</p></div>`;
-  const views = { dashboard: viewDashboard, fields: viewFields, inputs: viewInputs, scouting: viewScouting, yield: viewYield, trials: viewTrials };
+  const views = { dashboard: viewDashboard, fields: viewFields, inputs: viewInputs, sales: viewSales, yield: viewYield, trials: viewTrials };
   html += (views[UI.tab] || viewDashboard)();
   v.innerHTML = html;
   mountCharts();
@@ -1170,8 +1178,12 @@ function attentionItems(F) {
     else if (st.key === 'growing' && p.expectedHarvest && dn(p.expectedHarvest) - t <= 14) items.push({ cls: 'st-growing', pill: 'Soon', text: `${f.name}: ${c.name} harvest expected in ${dn(p.expectedHarvest) - t} days`, small: fmtDate(p.expectedHarvest, true), act: 'harvest', id: p.id, btn: 'Record harvest' });
   }
   if (UI.crop === 'all') for (const id of F.fieldIds) if (!plantingFor(id, F.y)) { const f = fieldById(id); items.push({ cls: 'st-planned', pill: 'No crop', text: `${f.name} has no crop assigned for ${F.y}`, small: '', act: 'edit-planting', id: id, btn: 'Assign crop' }); }
-  const sev = F.obs.filter(o => o.severity >= 4).sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 4);
-  for (const o of sev) { const f = fieldById(o.fieldId); items.push({ sev: o.severity, pill: `${o.severity} · ${SEVERITY[o.severity]}`, text: `${f ? f.name : ''}: ${issueLabel(o.issue)}`, small: `${fmtDate(o.date, true)} · ${o.note}`, act: 'goto', id: 'scouting', btn: 'Scouting' }); }
+  for (const x of (S.sales || []).filter(v => v.year === F.y && !v.delivered && v.deliverBy && (UI.crop === 'all' || v.cropId === UI.crop))) {
+    const days = dn(x.deliverBy) - t, c = cropById(x.cropId);
+    if (days > 14) continue;
+    items.push({ cls: 'st-ready', pill: days < 0 ? 'Overdue' : 'Deliver', text: `${saleTypeLabel(x.type)}: ${nf(x.quantity)} ${unitPer(c.unit)} of ${c.name.toLowerCase()}${x.buyer ? ' to ' + x.buyer : ''}`,
+      small: days < 0 ? `Was due ${fmtDate(x.deliverBy, true)}` : `Due ${fmtDate(x.deliverBy, true)}, in ${days} day${days === 1 ? '' : 's'}`, act: 'edit-sale', id: x.id, btn: 'Open sale' });
+  }
   return items;
 }
 
@@ -1272,7 +1284,7 @@ function viewDashboard() {
       opts: { yMoney: true, zeroLine: true } }) });
 
   const items = attentionItems(F);
-  const attn = `<article class="card"><div class="card-head"><div><h3>Needs attention</h3><p class="sub">Harvest timing, missing yields and severe scouting reports · ${F.y}</p></div></div>
+  const attn = `<article class="card"><div class="card-head"><div><h3>Needs attention</h3><p class="sub">Harvest timing, missing yields and contracts coming due · ${F.y}</p></div></div>
     ${items.length ? `<ul class="attn">${items.map(it => `<li><span class="pill ${it.cls || 'sev-pill'}"${it.sev ? ` data-sev="${it.sev}"` : ''}>${it.sev ? ICON.alert : ''}${esc(it.pill)}</span><div class="attn-text">${esc(it.text)}${it.small ? `<small>${esc(it.small)}</small>` : ''}</div><button type="button" class="btn sm" data-act="${it.act}" data-id="${esc(it.id)}">${esc(it.btn)}</button></li>`).join('')}</ul>` : '<p class="muted">Nothing needs attention for this selection.</p>'}</article>`;
 
   html += `<section class="charts">${c1}${c2}${c3}${c4}${c5}${attn}</section>`;
@@ -1327,6 +1339,7 @@ function viewFields() {
   let html = `<div class="toolbar"><div><h2>Fields</h2><p>${list.length} of ${S.fields.length} fields · ${nf(totalAc)} ac · ${y} season</p></div>
     <div class="toolbar-actions"><button type="button" class="btn btn-primary" data-act="add-field">+ Add field</button></div></div>`;
   html += list.length ? `<div class="field-grid">${list.map(f => fieldCard(f, y)).join('')}</div>` : `<div class="card"><p class="muted">${S.fields.length ? 'No fields match these filters.' : 'No fields yet. Add your first field to get started.'}</p></div>`;
+  html += rainfallCard(F);
   html += `<section class="card"><div class="card-head"><div><h3>Crops &amp; sell prices</h3><p class="sub">Used when a field's season doesn't set its own expected yield or sale price</p></div>
     <button type="button" class="btn" data-act="add-crop">+ Add custom crop</button></div>
     ${marketNote()}<div class="table-wrap"><table class="rtable"><thead><tr><th>Crop</th><th>Unit</th><th class="num">Sell price</th><th class="num">Expected yield</th><th class="num">Days to harvest</th><th>Growth stages</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>
@@ -1413,27 +1426,16 @@ function viewInputs() {
 }
 
 /* ================= Scouting ================= */
-function viewScouting() {
-  const F = filt(), y = F.y;
-  let obs = F.obs.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  if (UI.obsIssue !== 'all') obs = obs.filter(o => o.issue === UI.obsIssue);
+/* Rainfall log, shown on the Fields tab */
+function rainfallCard(F) {
+  const y = F.y;
   const gauges = new Set(['farm', ...F.fieldIds]);
   const rain = S.rainfall.filter(r => r.date && r.date.slice(0, 4) === String(y) && gauges.has(r.fieldId)).sort((a, b) => b.date.localeCompare(a.date));
   const mainGauge = UI.field !== 'all' && rain.some(r => r.fieldId === UI.field) ? UI.field : 'farm';
   const g = rain.filter(r => r.fieldId === mainGauge), gTotal = sum(g, r => r.inches), big = g.slice().sort((a, b) => b.inches - a.inches)[0];
   const LIMIT = 15, shownRain = UI.showAllRain ? rain : rain.slice(0, LIMIT);
   const quickField = UI.field !== 'all' ? UI.field : 'farm';
-  return `<div class="toolbar"><div><h2>Scouting &amp; rainfall</h2><p>${F.obs.length} observations · ${y} season</p></div>
-    <div class="toolbar-actions"><button type="button" class="btn btn-primary" data-act="add-obs">+ Add observation</button></div></div>
-  <div class="grid-2">
-    <section class="card"><div class="card-head"><div><h3>Field observations</h3><p class="sub">Severity 1 (low) to 5 (severe), newest first</p></div>
-      <div class="card-head-actions"><label class="sr-only" for="obsIssue">Issue type</label><select id="obsIssue" style="width:auto;min-width:170px"><option value="all">All issues</option>${ISSUES.map(i => `<option value="${i.id}"${UI.obsIssue === i.id ? ' selected' : ''}>${i.label}</option>`).join('')}</select></div></div>
-      ${obs.length ? `<div class="obs-list">${obs.map(o => { const f = fieldById(o.fieldId) || {}; const p = plantingFor(o.fieldId, o.year); const c = p ? cropById(p.cropId) : null;
-        return `<article class="obs" data-sev="${o.severity}"><div class="obs-main"><div class="obs-top"><span class="date">${fmtDate(o.date, true)}</span><span class="pill sev-pill" data-sev="${o.severity}">${o.severity >= 4 ? ICON.alert : ''}${o.severity} · ${SEVERITY[o.severity]}</span><span class="chip">${esc(issueLabel(o.issue))}</span></div>
-          <div class="small"><b>${esc(f.name || '—')}</b>${c ? ` · ${esc(c.name)}` : ''}${o.stage ? ` · stage ${esc(o.stage)}` : ''}</div>${o.note ? `<p class="obs-note">${esc(o.note)}</p>` : ''}</div>
-          <div class="obs-actions"><button type="button" class="icon-btn" data-act="edit-obs" data-id="${esc(o.id)}" aria-label="Edit observation">${ICON.edit}</button><button type="button" class="icon-btn danger" data-act="del-obs" data-id="${esc(o.id)}" aria-label="Delete observation">${ICON.del}</button></div></article>`; }).join('')}</div>` : '<p class="muted">No observations for this selection yet.</p>'}
-    </section>
-    <section class="card"><div class="card-head"><div><h3>Rainfall log</h3><p class="sub">Inches per reading · farm-wide gauge or a field's own gauge</p></div></div>
+  return `    <section class="card"><div class="card-head"><div><h3>Rainfall log</h3><p class="sub">Inches per reading · farm-wide gauge or a field's own gauge</p></div></div>
       ${autoRainNote()}<form class="quick" id="rainQuick" novalidate>
         <div class="fld"><label for="rqDate">Date</label><input type="date" id="rqDate" value="${today().slice(0, 4) === String(y) ? today() : `${y}-06-01`}" required></div>
         <div class="fld q-gauge"><label for="rqGauge">Gauge</label><select id="rqGauge">${fieldOptions(quickField, { farm: true })}</select></div>
@@ -1445,8 +1447,192 @@ function viewScouting() {
         ${shownRain.map(r => `<tr><td class="rt-title" data-label="Date">${fmtDate(r.date, true)}</td><td data-label="Gauge">${esc(gaugeName(r.fieldId))}${String(r.id).startsWith('auto-') ? ' <span class="auto-tag">auto</span>' : ''}</td><td class="num" data-label="Inches">${nf(r.inches, 2)} in</td>
         <td class="actions"><button type="button" class="icon-btn" data-act="edit-rain" data-id="${esc(r.id)}" aria-label="Edit reading">${ICON.edit}</button><button type="button" class="icon-btn danger" data-act="del-rain" data-id="${esc(r.id)}" aria-label="Delete reading">${ICON.del}</button></td></tr>`).join('')}
       </tbody></table></div>${rain.length > LIMIT && !UI.showAllRain ? `<div class="more-row"><button type="button" class="btn" data-act="more-rain">Show all ${rain.length} readings</button></div>` : ''}` : '<p class="muted">No rainfall logged for this season.</p>'}
-    </section>
-  </div>`;
+    </section>`;
+}
+
+/* ================= Sales: what was sold, for how much, and what the market was ================= */
+const SAMPLE_SALES = [{"date": "2026-07-08", "year": 2026, "cropId": "wheat-winter", "fieldId": "f4", "buyer": "Co-op elevator", "type": "cash", "ref": "T-20418", "quantity": 5568, "price": 5.45, "futures": 5.995, "futuresMonth": "Sep 2026", "moisture": 12.8, "testWeight": 59.5, "deductions": 612.48, "delivered": true, "notes": "Sold off the combine."}, {"date": "2026-08-12", "year": 2026, "cropId": "corn", "fieldId": null, "buyer": "Ethanol plant", "type": "forward", "ref": "FC-1187", "quantity": 10000, "price": 4.12, "futures": 4.57, "futuresMonth": "Dec 2026", "deductions": 0, "delivered": true, "deliverBy": "2026-11-15", "notes": "Contracted before harvest for fall delivery."}, {"date": "2026-09-15", "year": 2026, "cropId": "sorghum", "fieldId": "f5", "buyer": "Co-op elevator", "type": "forward", "ref": "FC-1203", "quantity": 6000, "price": 4.66, "futures": 5.3575, "futuresMonth": "Dec 2026", "deductions": 0, "delivered": false, "deliverBy": "2026-11-30", "notes": "Priced off Dec corn."}, {"date": "2026-10-08", "year": 2026, "cropId": "soybeans", "fieldId": null, "buyer": "River terminal", "type": "cash", "ref": "T-31077", "quantity": 3000, "price": 12.03, "futures": 12.875, "futuresMonth": "Nov 2026", "moisture": 12.5, "testWeight": 56.0, "deductions": 345.0, "delivered": true}, {"date": "2026-10-16", "year": 2026, "cropId": "corn", "fieldId": null, "buyer": "Co-op elevator", "type": "cash", "ref": "T-20977", "quantity": 15000, "price": 4.32, "futures": 4.7425, "futuresMonth": "Dec 2026", "moisture": 17.5, "testWeight": 56.2, "deductions": 2475.0, "delivered": true, "notes": "Drying and shrink on 2.5 points."}, {"date": "2026-10-28", "year": 2026, "cropId": "corn", "fieldId": null, "buyer": "Ethanol plant", "type": "cash", "ref": "T-21342", "quantity": 12000, "price": 4.22, "futures": 4.5175, "futuresMonth": "Dec 2026", "moisture": 16.0, "testWeight": 55.8, "deductions": 960.0, "delivered": true}];
+const SALE_TYPES = [{ id: 'cash', label: 'Cash sale' }, { id: 'forward', label: 'Forward contract' }, { id: 'hta', label: 'Hedge-to-arrive' },
+  { id: 'basis', label: 'Basis contract' }, { id: 'delayed', label: 'Delayed price' }, { id: 'other', label: 'Other' }];
+const saleTypeLabel = id => (SALE_TYPES.find(t => t.id === id) || { label: 'Sale' }).label;
+function normSale(x) {
+  const date = sdate(x.date);
+  return { id: sid(x.id, 's'), date, year: num(x.year) ?? (date ? +date.slice(0, 4) : new Date().getFullYear()), cropId: sref(x.cropId) || 'corn', fieldId: sref(x.fieldId) || null,
+    buyer: String(x.buyer || '').slice(0, 120), type: SALE_TYPES.some(t => t.id === x.type) ? x.type : 'cash', ref: String(x.ref || '').slice(0, 60),
+    quantity: num(x.quantity) ?? 0, price: num(x.price), futures: num(x.futures), futuresMonth: String(x.futuresMonth || '').slice(0, 30),
+    moisture: num(x.moisture), testWeight: num(x.testWeight), deductions: num(x.deductions) ?? 0, delivered: x.delivered !== false, deliverBy: sdate(x.deliverBy), notes: String(x.notes || '') };
+}
+const salePriced = x => x.price != null && x.price > 0;
+const saleBasis = x => salePriced(x) && x.futures != null ? x.price - x.futures : null;
+const saleGross = x => salePriced(x) ? x.quantity * x.price : null;
+const saleNet = x => salePriced(x) ? x.quantity * x.price - (x.deductions || 0) : null;
+// How much of a crop's season was raised, sold and still unsold, and the blended price for Yield & Profit.
+function marketing(cropId, year) {
+  const crop = cropById(cropId), sales = (S.sales || []).filter(x => x.cropId === cropId && x.year === year);
+  const production = sum(S.plantings.filter(p => p.cropId === cropId && p.year === year && fieldById(p.fieldId)),
+    p => { const a = num(p.actualYield); return (a != null ? a : (num(p.expectedYield) ?? crop.expectedYield)) * pAcres(p); });
+  const sold = sum(sales, x => x.quantity), priced = sales.filter(salePriced), pricedQty = sum(priced, x => x.quantity);
+  const net = sum(priced, saleNet) + sum(sales.filter(x => !salePriced(x)), x => x.quantity * crop.price - (x.deductions || 0));
+  const withFut = priced.filter(x => x.futures != null), futQty = sum(withFut, x => x.quantity);
+  const unsold = Math.max(0, production - sold);
+  const blended = sold > 0 ? (net + unsold * crop.price) / (sold + unsold) : null;
+  return { crop, sales, production, sold, unsold, net, pricedQty, blended, unsoldValue: unsold * crop.price, pctSold: production ? sold / production : null,
+    avgPrice: pricedQty ? sum(priced, x => x.quantity * x.price) / pricedQty : null,
+    avgFutures: futQty ? sum(withFut, x => x.quantity * x.futures) / futQty : null,
+    avgBasis: futQty ? sum(withFut, x => x.quantity * (x.price - x.futures)) / futQty : null,
+    deductions: sum(sales, x => x.deductions || 0), notDelivered: sales.filter(x => !x.delivered) };
+}
+
+/* Price history (price-history.json, kept by the same weekday job) fills in the market for any day in the past year. */
+let PRICE_HIST = null;
+async function loadPriceHistory() {
+  if (PRICE_HIST || !/^https?:/.test(location.protocol)) return PRICE_HIST;
+  try { const r = await fetch('price-history.json?d=' + today(), { cache: 'no-store' }); if (r.ok) { const d = await r.json(); if (d && d.days) PRICE_HIST = d; } } catch (e) { /* typed by hand instead */ }
+  return PRICE_HIST;
+}
+function futuresOn(cropId, date) {
+  const key = MARKET_MAP[cropId];
+  if (!key || !PRICE_HIST || !date) return null;
+  const days = Object.keys(PRICE_HIST.days).filter(d => d <= date).sort();
+  for (let i = days.length - 1; i >= 0 && i >= days.length - 7; i--) { const v = PRICE_HIST.days[days[i]][key]; if (v != null && dn(date) - dn(days[i]) <= 7) return { price: v, date: days[i] }; }
+  return null;
+}
+const fmtFut = (v, unit) => v == null ? '—' : money(v, unit === 'lb/ac' ? 4 : 4).replace(/0{1,2}$/, '') + '/' + unitPer(unit);
+const fmtBasis = (b, unit) => b == null ? '—' : `${b < 0 ? '−' : '+'}${money(Math.abs(b), unit === 'lb/ac' ? 3 : 2)}`;
+
+function viewSales() {
+  const y = UI.year;
+  const list = (S.sales || []).filter(x => x.year === y && (UI.crop === 'all' || x.cropId === UI.crop) && (UI.field === 'all' || !x.fieldId || x.fieldId === UI.field))
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const cropIds = [...new Set([...filt().plantings.map(p => p.cropId), ...list.map(x => x.cropId)])].sort((a, b) => S.crops.findIndex(c => c.id === a) - S.crops.findIndex(c => c.id === b));
+  const M = cropIds.map(id => marketing(id, y));
+  const buQty = sum(list.filter(x => cropById(x.cropId).unit === 'bu/ac'), x => x.quantity);
+  const netRec = sum(list.filter(salePriced), saleNet);
+  const withFut = list.filter(x => saleBasis(x) != null && cropById(x.cropId).unit === 'bu/ac'), fq = sum(withFut, x => x.quantity);
+  const avgBasis = fq ? sum(withFut, x => x.quantity * saleBasis(x)) / fq : null;
+  const unsoldVal = sum(M, m => m.unsoldValue);
+  let html = `<div class="toolbar"><div><h2>Sales</h2><p>${list.length} sale${list.length === 1 ? '' : 's'} · ${y} season</p></div>
+    <div class="toolbar-actions"><button type="button" class="btn btn-primary" data-act="add-sale">+ Record a sale</button></div></div>`;
+  html += `<section class="tiles" aria-label="Sales summary">
+    <div class="tile"><div class="tile-label">Net received</div><div class="tile-value">${moneyC(netRec)}</div><div class="tile-sub">after ${money(sum(list, x => x.deductions || 0))} in deductions</div></div>
+    <div class="tile"><div class="tile-label">Bushels sold</div><div class="tile-value">${nf(buQty)}<span class="unit">bu</span></div><div class="tile-sub">${list.filter(x => !x.delivered).length} contract${list.filter(x => !x.delivered).length === 1 ? '' : 's'} not delivered yet</div></div>
+    <div class="tile"><div class="tile-label">Average basis</div><div class="tile-value">${avgBasis == null ? '—' : fmtBasis(avgBasis, 'bu/ac')}<span class="unit">/bu</span></div><div class="tile-sub">${avgBasis == null ? 'Enter the futures price on a sale to see it' : `${avgBasis < 0 ? 'under' : 'over'} futures, weighted by bushels`}</div></div>
+    <div class="tile"><div class="tile-label">Still unsold</div><div class="tile-value">${moneyC(unsoldVal)}</div><div class="tile-sub">at today's sell prices</div></div>
+  </section>`;
+  html += `<section class="card"><div class="card-head"><div><h3>Marketing by crop</h3><p class="sub">Harvested crop (or expected, before harvest) compared with what's sold or contracted</p></div></div>
+    ${M.length ? `<div class="table-wrap"><table class="rtable dense"><thead><tr><th>Crop</th><th class="num">Raised</th><th class="num">Sold</th><th class="num">% sold</th><th class="num">Avg price</th><th class="num">Avg futures</th><th class="num">Avg basis</th><th class="num">Net received</th><th class="num">Unsold</th><th class="num">Unsold value</th></tr></thead><tbody>
+    ${M.map(m => { const u = unitPer(m.crop.unit), pct = m.pctSold == null ? null : Math.min(1, m.pctSold);
+      return `<tr><td class="rt-title" data-label="Crop"><span class="crop-name"><i class="dot" style="--c:${cropVar(m.crop)}"></i>${esc(m.crop.name)}</span></td>
+      <td class="num" data-label="Raised">${nf(m.production)} ${u}</td><td class="num" data-label="Sold">${nf(m.sold)} ${u}</td>
+      <td class="num" data-label="% sold">${pct == null ? '—' : `<span class="pct"><span class="pct-bar"><i style="width:${(pct * 100).toFixed(0)}%"></i></span>${Math.round(m.pctSold * 100)}%</span>`}</td>
+      <td class="num" data-label="Avg price">${m.avgPrice == null ? '—' : fmtPrice(m.avgPrice, m.crop.unit)}</td><td class="num" data-label="Avg futures">${m.avgFutures == null ? '—' : fmtPrice(m.avgFutures, m.crop.unit)}</td>
+      <td class="num" data-label="Avg basis">${fmtBasis(m.avgBasis, m.crop.unit)}</td><td class="num" data-label="Net received">${money(m.net)}</td>
+      <td class="num" data-label="Unsold">${nf(m.unsold)} ${u}</td><td class="num" data-label="Unsold value">${money(m.unsoldValue)}</td></tr>`; }).join('')}
+    </tbody></table></div><p class="chart-note">Unsold grain is valued at today's sell price (futures + your basis). Yield &amp; Profit uses what you were paid for the sold bushels and today's price for the rest.</p>` : '<p class="muted">No crops or sales for this selection.</p>'}</section>`;
+  const chartRows = list.filter(x => salePriced(x) && x.futures != null).slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  html += chartCard({ key: 'sales-vs-market', title: 'Price received vs the market', sub: `Each sale's price and the futures price that day · $ per unit · ${y}`, height: 280,
+    legend: legendItem('var(--exp)', 'Futures that day') + legendItem('var(--act)', 'Price received'),
+    empty: chartRows.length ? null : 'Record a sale with its price and the futures price to compare them here.',
+    aria: `Grouped bar chart of price received and futures for each sale: ${chartRows.map(x => `${fmtDate(x.date)} ${cropById(x.cropId).name} ${fmtPrice(x.price, cropById(x.cropId).unit)}`).join(', ')}`,
+    table: { head: [{ t: 'Sale' }, { t: 'Futures', num: 1 }, { t: 'Price received', num: 1 }, { t: 'Basis', num: 1 }],
+      rows: chartRows.map(x => { const c = cropById(x.cropId); return [`${fmtDate(x.date, true)} · ${esc(c.name)}${x.buyer ? ' · ' + esc(x.buyer) : ''}`, fmtFut(x.futures, c.unit), fmtPrice(x.price, c.unit), fmtBasis(saleBasis(x), c.unit)]; }) },
+    build: () => ({ type: 'bar', data: { labels: chartRows.map(x => [fmtDate(x.date), cropById(x.cropId).name]), datasets: [
+      { label: 'Futures that day', data: chartRows.map(x => r2(x.futures)), backgroundColor: css('--exp') },
+      { label: 'Price received', data: chartRows.map(x => r2(x.price)), backgroundColor: css('--act') }] },
+      meta: { fmt: v => money(v, 2), title: i => { const x = chartRows[i]; return `${fmtDate(x.date, true)} · ${cropById(x.cropId).name}${x.buyer ? ' · ' + x.buyer : ''}`; },
+        note: i => { const x = chartRows[i], b = saleBasis(x); return `Basis ${fmtBasis(b, cropById(x.cropId).unit)} · ${nf(x.quantity)} ${unitPer(cropById(x.cropId).unit)}`; } },
+      opts: { yMoney: true } }) });
+  html += `<section class="card"><div class="card-head"><div><h3>Sales log</h3><p class="sub">Newest first. Basis = price received − futures that day.</p></div></div>
+    ${list.length ? `<div class="table-wrap"><table class="rtable dense"><thead><tr><th>Date</th><th>Crop</th><th>Buyer</th><th>Type</th><th class="num">Quantity</th><th class="num">Price</th><th class="num">Futures</th><th class="num">Basis</th><th class="num">Deductions</th><th class="num">Net</th><th class="num">Net per unit</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>
+    ${list.map(x => { const c = cropById(x.cropId), u = unitPer(c.unit), f = x.fieldId ? fieldById(x.fieldId) : null, net = saleNet(x);
+      const due = !x.delivered && x.deliverBy ? dn(x.deliverBy) - dn(today()) : null;
+      return `<tr><td class="rt-title nowrap" data-label="Date">${fmtDate(x.date, true)}</td>
+      <td data-label="Crop"><span class="crop-name"><i class="dot" style="--c:${cropVar(c)}"></i>${esc(c.name)}</span>${f ? `<div class="small muted">${esc(f.name)}</div>` : ''}</td>
+      <td data-label="Buyer">${esc(x.buyer || '—')}${x.ref ? `<div class="small muted">#${esc(x.ref)}</div>` : ''}</td><td data-label="Type">${esc(saleTypeLabel(x.type))}</td>
+      <td class="num" data-label="Quantity">${nf(x.quantity)} ${u}</td><td class="num" data-label="Price">${salePriced(x) ? fmtPrice(x.price, c.unit) : '<span class="muted">Not priced</span>'}</td>
+      <td class="num" data-label="Futures">${fmtFut(x.futures, c.unit)}${x.futuresMonth ? `<div class="small muted">${esc(x.futuresMonth)}</div>` : ''}</td>
+      <td class="num" data-label="Basis">${fmtBasis(saleBasis(x), c.unit)}</td><td class="num" data-label="Deductions">${x.deductions ? money(x.deductions, 2) : '—'}</td>
+      <td class="num" data-label="Net">${net == null ? '—' : money(net)}</td><td class="num" data-label="Net per unit">${net == null || !x.quantity ? '—' : fmtPrice(net / x.quantity, c.unit)}</td>
+      <td data-label="Status">${x.delivered ? '<span class="pill st-harvested">Delivered</span>' : `<span class="pill ${due != null && due <= 14 ? 'st-ready' : 'st-planned'}">${due == null ? 'Not delivered' : due < 0 ? `Overdue ${-due} days` : `Due ${fmtDate(x.deliverBy)}`}</span>`}</td>
+      <td class="actions"><button type="button" class="icon-btn" data-act="edit-sale" data-id="${esc(x.id)}" aria-label="Edit sale">${ICON.edit}</button><button type="button" class="icon-btn danger" data-act="del-sale" data-id="${esc(x.id)}" aria-label="Delete sale">${ICON.del}</button></td></tr>`; }).join('')}
+    </tbody></table></div>` : `<p class="muted">No sales recorded for ${y}${UI.crop !== 'all' ? ' and this crop' : ''}. Tap <b>+ Record a sale</b> after each settlement sheet or contract.</p>`}</section>`;
+  return html;
+}
+
+function openSaleModal(id) {
+  const x = id ? (S.sales || []).find(v => v.id === id) : null;
+  const defCrop = UI.crop !== 'all' ? UI.crop : ((S.plantings.find(p => p.year === UI.year) || {}).cropId || 'corn');
+  const d = x || { date: today(), year: UI.year, cropId: defCrop, fieldId: UI.field !== 'all' ? UI.field : null, buyer: '', type: 'cash', ref: '', quantity: null, price: null, futures: null, futuresMonth: '', moisture: null, testWeight: null, deductions: null, delivered: true, deliverBy: null, notes: '' };
+  const buyers = [...new Set((S.sales || []).map(v => v.buyer).filter(Boolean))].sort();
+  const c0 = cropById(d.cropId), u0 = unitPer(c0.unit);
+  const num4 = v => v == null ? '' : String(Math.round(v * 10000) / 10000);
+  openModal({ title: x ? 'Edit sale' : 'Record a sale', submitLabel: x ? 'Save sale' : 'Add sale', wide: true,
+    body: `<div class="form-grid">
+      <div class="fld"><label for="sDate">Date sold or contracted</label><input id="sDate" type="date" value="${esc(d.date || '')}"></div>
+      <div class="fld"><label for="sYear">Season (crop year)</label>${yearSelect('sYear', d.year)}</div>
+      <div class="fld"><label for="sCrop">Crop</label><select id="sCrop">${S.crops.map(c => `<option value="${esc(c.id)}"${c.id === d.cropId ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
+      <div class="fld"><label for="sField">Field</label><select id="sField"><option value="">Whole farm, not one field</option>${S.fields.map(f => `<option value="${esc(f.id)}"${f.id === d.fieldId ? ' selected' : ''}>${esc(f.name)}</option>`).join('')}</select></div>
+      <div class="fld"><label for="sBuyer">Buyer</label><input id="sBuyer" type="text" list="sBuyerList" value="${esc(d.buyer)}" placeholder="Elevator, ethanol plant, feedlot" autocomplete="off"><datalist id="sBuyerList">${buyers.map(b => `<option value="${esc(b)}"></option>`).join('')}</datalist></div>
+      <div class="fld"><label for="sRef">Contract or ticket #</label><input id="sRef" type="text" value="${esc(d.ref)}" autocomplete="off"></div>
+      <div class="fld span-2"><span class="lbl" id="sTypeLbl">Type of sale</span><div class="choice" role="radiogroup" aria-labelledby="sTypeLbl">${SALE_TYPES.map(t => `<label><input type="radio" name="sType" value="${t.id}"${t.id === d.type ? ' checked' : ''}><span>${t.label}</span></label>`).join('')}</div></div>
+      <div class="fld"><label for="sQty">Amount sold</label>${unitField('sQty', d.quantity, u0)}<span class="hint">Net amount from the settlement sheet or contract.</span></div>
+      <div class="fld"><label for="sPrice">Price received</label>${unitField('sPrice', d.price, '$/' + u0)}<span class="hint">Before deductions. Leave blank if it isn't priced yet.</span></div>
+      <div class="fld"><label for="sFut">Futures that day</label>${unitField('sFut', num4(d.futures), '$/' + u0)}<span class="hint" id="sFutHint"></span></div>
+      <div class="fld"><label for="sFutM">Futures month</label><input id="sFutM" type="text" value="${esc(d.futuresMonth)}" placeholder="e.g. Dec 2026" autocomplete="off"></div>
+      <div class="fld"><label for="sDed">Deductions</label>${unitField('sDed', d.deductions, '$')}<span class="hint">Drying, shrink, trucking and checkoff from the settlement sheet.</span></div>
+      <div class="fld"><label for="sMoist">Moisture at delivery</label>${unitField('sMoist', d.moisture, '%')}</div>
+      <div class="fld"><label for="sTw">Test weight</label>${unitField('sTw', d.testWeight, 'lb/bu')}</div>
+      <div class="fld"><span class="lbl" id="sDelLbl">Delivered?</span><div class="choice" role="radiogroup" aria-labelledby="sDelLbl"><label><input type="radio" name="sDel" value="yes"${d.delivered ? ' checked' : ''}><span>Delivered</span></label><label><input type="radio" name="sDel" value="no"${d.delivered ? '' : ' checked'}><span>Not yet</span></label></div></div>
+      <div class="fld" id="sByWrap"><label for="sBy">Deliver by</label><input id="sBy" type="date" value="${esc(d.deliverBy || '')}"></div>
+      <div class="fld span-2"><label for="sNotes">Notes</label><input id="sNotes" type="text" value="${esc(d.notes)}" autocomplete="off"></div>
+      <div class="calc" id="sCalc" aria-live="polite"></div>
+    </div>`,
+    onOpen: () => {
+      const futTouched = { v: !!x }, monthTouched = { v: !!(x && x.futuresMonth) };
+      $('#sFut').addEventListener('input', () => { futTouched.v = true; calc(); });
+      $('#sFutM').addEventListener('input', () => { monthTouched.v = true; });
+      const crop = () => cropById(val('sCrop'));
+      const autoFut = () => {
+        const c = crop(), date = val('sDate'), hint = $('#sFutHint');
+        if (!MARKET_MAP[c.id]) { hint.textContent = 'This crop has no futures market. Leave blank.'; return; }
+        const f = futuresOn(c.id, date);
+        if (f && !futTouched.v) { $('#sFut').value = String(f.price); if (!monthTouched.v) { const q = marketQuote(c); $('#sFutM').value = q && q.contract && MARKET && dn(date) >= dn(String(MARKET.asOf).slice(0, 10)) - 5 ? q.contract.replace('-', ' ') : 'Nearby'; } }
+        const lbl = c.id === 'sorghum' ? 'Corn' : ((MARKET && MARKET.quotes && MARKET.quotes[MARKET_MAP[c.id]]) || {}).label || c.name;
+        hint.textContent = f ? `${lbl} futures closed at ${fmtPrice(f.price, c.unit)} on ${fmtDate(f.date, true)}. Change it if your contract used a different month.`
+          : PRICE_HIST ? 'No market close found for that date. Type the futures price from your contract.' : 'Type the futures price from your contract or the market that day.';
+        calc();
+      };
+      const calc = () => {
+        const c = crop(), u = unitPer(c.unit), q = num(val('sQty')), p = num(val('sPrice')), f = num(val('sFut')), ded = num(val('sDed')) || 0;
+        const parts = [];
+        if (p != null && f != null) parts.push(`Basis ${fmtBasis(p - f, c.unit)} (${p - f < 0 ? 'under' : 'over'} futures)`);
+        if (q != null && p != null) { const gross = q * p, net = gross - ded; parts.push(`gross ${money(gross)}`, `deductions ${money(ded)}`, `net ${money(net)} (${fmtPrice(q ? net / q : 0, c.unit)})`); }
+        else if (q != null) parts.push(`${nf(q)} ${u}, not priced yet: counted at today's sell price of ${fmtPrice(c.price, c.unit)}`);
+        $('#sCalc').textContent = parts.length ? parts.join(' · ') : 'Enter the amount and price to see the totals.';
+      };
+      const units = () => { const u = unitPer(crop().unit); $('#sQtyU').textContent = u; $('#sPriceU').textContent = '$/' + u; $('#sFutU').textContent = '$/' + u; };
+      const del = () => { $('#sByWrap').hidden = radio('sDel') !== 'no'; };
+      $('#sCrop').addEventListener('change', () => { futTouched.v = false; units(); autoFut(); });
+      $('#sDate').addEventListener('change', () => { if (!x) futTouched.v = false; autoFut(); });
+      ['sQty', 'sPrice', 'sDed'].forEach(i => $('#' + i).addEventListener('input', calc));
+      $$('input[name="sDel"]').forEach(r => r.addEventListener('change', del));
+      units(); del(); calc();
+      loadPriceHistory().then(autoFut);
+    },
+    onSubmit: () => {
+      const date = val('sDate'), cropId = val('sCrop'), q = num(val('sQty')), p = num(val('sPrice')), f = num(val('sFut')), ded = num(val('sDed'));
+      if (!date) return 'Enter the date of the sale.';
+      if (!S.crops.some(c => c.id === cropId)) return 'Choose a crop.';
+      if (q == null || q <= 0) return 'Enter the amount sold.';
+      if (p != null && p < 0) return 'The price can\'t be negative.';
+      if (f != null && f < 0) return 'The futures price can\'t be negative.';
+      if (ded != null && ded < 0) return 'Deductions can\'t be negative. Enter them as a positive number.';
+      const data = { date, year: +val('sYear'), cropId, fieldId: val('sField') || null, buyer: val('sBuyer'), type: radio('sType') || 'cash', ref: val('sRef'),
+        quantity: q, price: p, futures: f, futuresMonth: val('sFutM'), moisture: num(val('sMoist')), testWeight: num(val('sTw')), deductions: ded ?? 0,
+        delivered: radio('sDel') !== 'no', deliverBy: radio('sDel') === 'no' ? (val('sBy') || null) : null, notes: val('sNotes') };
+      if (x) Object.assign(x, data); else S.sales.push(normSale(Object.assign({ id: uid('s') }, data)));
+      commit(); toast(`${x ? 'Saved' : 'Added'} ${cropById(cropId).name.toLowerCase()} sale: ${nf(q)} ${unitPer(cropById(cropId).unit)}`);
+    } });
 }
 
 /* ================= Yield & profit ================= */
@@ -1467,7 +1653,7 @@ function viewYield() {
       <td data-label="Crop"><span class="crop-name"><i class="dot" style="--c:${cropVar(e.crop)}"></i>${esc(e.crop.name)}</span></td>
       <td class="num" data-label="Acres">${nf(e.acres)}</td><td class="num" data-label="Expected">${fmtYield(e.expY)} ${esc(e.crop.unit)}</td>
       <td class="num" data-label="Actual">${e.harvested ? `<b>${fmtYield(e.act)}</b> ${esc(e.crop.unit)}` : '<span class="muted">—</span>'}</td><td class="num" data-label="vs expected">${pctCell(e)}</td>
-      <td class="num" data-label="Price">${fmtPrice(e.price, e.crop.unit)}</td><td class="num" data-label="Gross revenue">${money(e.revenue)}</td><td class="num" data-label="Total cost">${money(e.cost)}</td>
+      <td class="num" data-label="Price">${fmtPrice(e.price, e.crop.unit)}${e.priceFrom === 'sales' ? '<div class="small muted">from sales</div>' : ''}</td><td class="num" data-label="Gross revenue">${money(e.revenue)}</td><td class="num" data-label="Total cost">${money(e.cost)}</td>
       <td class="num" data-label="Cost/ac">${money(e.costAc)}</td><td class="num" data-label="Net profit"><span class="${e.net >= 0 ? 'pos' : 'neg'}">${money(e.net)}</span></td>
       <td class="num" data-label="Profit/ac"><span class="${e.netAc >= 0 ? 'pos' : 'neg'}">${signedMoney(e.netAc)}</span></td>
       <td class="num" data-label="Break-even price">${fmtPrice(e.bePrice, e.crop.unit)}</td><td class="num" data-label="Break-even yield">${fmtYield(e.beYield)} ${esc(e.crop.unit)}</td>
@@ -1475,7 +1661,7 @@ function viewYield() {
     </tbody><tfoot><tr><td class="rt-title" data-label="">Total</td><td data-label=""></td><td class="num" data-label="Acres">${nf(acres)}</td><td data-label=""></td><td data-label=""></td><td data-label=""></td><td data-label=""></td>
       <td class="num" data-label="Gross revenue">${money(rev)}</td><td class="num" data-label="Total cost">${money(cost)}</td><td class="num" data-label="Cost/ac">${money(acres ? cost / acres : 0)}</td>
       <td class="num" data-label="Net profit"><span class="${net >= 0 ? 'pos' : 'neg'}">${money(net)}</span></td><td class="num" data-label="Profit/ac"><span class="${net >= 0 ? 'pos' : 'neg'}">${signedMoney(acres ? net / acres : 0)}</span></td><td data-label=""></td><td data-label=""></td><td data-label=""></td></tr></tfoot></table></div>` : '<p class="muted">No planted fields for this selection.</p>'}
-    <p class="chart-note">Break-even price = total cost ÷ (yield × acres). Break-even yield = total cost ÷ (price × acres). Costs include every input logged for the field and season, land rent included.${MARKET_STATE === 'on' ? ` Fields without a sale price use today's sell price (futures + basis, updated ${fmtDate(String(MARKET.asOf).slice(0, 10), true)}). Enter the sale price when you record a harvest to lock in what you were paid.` : ''}</p>
+    <p class="chart-note">Break-even price = total cost ÷ (yield × acres). Break-even yield = total cost ÷ (price × acres). Costs include every input logged for the field and season, land rent included.${E.some(e => e.priceFrom === 'sales') ? ' Prices marked “from sales” blend what you were paid for the bushels sold (Sales tab) with today\'s sell price for the rest.' : ''}${MARKET_STATE === 'on' ? ` Fields without a sale price use today's sell price (futures + basis, updated ${fmtDate(String(MARKET.asOf).slice(0, 10), true)}). Enter the sale price when you record a harvest to lock in what you were paid.` : ''}</p>
   </section>`;
 }
 
@@ -1917,46 +2103,6 @@ function openInputModal(id) {
 }
 
 /* ---------- Observation ---------- */
-function openObsModal(id) {
-  if (!S.fields.length) { toast('Add a field first'); return; }
-  const o = id ? S.observations.find(x => x.id === id) : null;
-  const defField = o ? o.fieldId : (UI.field !== 'all' ? UI.field : S.fields[0].id);
-  const d = o || { date: today(), fieldId: defField, year: suggestSeason(defField, today()) || UI.year, stage: '', issue: 'weeds', severity: 2, note: '' };
-  openModal({ title: o ? 'Edit observation' : 'Add observation', submitLabel: o ? 'Save observation' : 'Add observation', wide: true,
-    body: `<div class="form-grid">
-      <div class="fld"><label for="oDate">Date</label><input id="oDate" type="date" value="${esc(d.date || '')}"></div>
-      <div class="fld"><label for="oField">Field</label><select id="oField">${fieldOptions(d.fieldId)}</select></div>
-      <div class="fld"><label for="oYear">Season</label>${yearSelect('oYear', d.year)}</div>
-      <div class="fld"><label for="oStage">Growth stage</label><input id="oStage" type="text" list="oStageList" value="${esc(d.stage)}" placeholder="e.g. V6" autocomplete="off"><datalist id="oStageList"></datalist><span class="hint" id="oStageHint"></span></div>
-      <div class="fld span-2"><span class="lbl" id="oIssueLbl">Issue type</span><div class="choice" role="radiogroup" aria-labelledby="oIssueLbl">${ISSUES.map(x => `<label><input type="radio" name="oIssue" value="${x.id}"${x.id === d.issue ? ' checked' : ''}><span>${x.label}</span></label>`).join('')}</div></div>
-      <div class="fld span-2"><span class="lbl" id="oSevLbl">Severity</span><div class="choice sev" role="radiogroup" aria-labelledby="oSevLbl">${[1, 2, 3, 4, 5].map(n => `<label><input type="radio" name="oSev" value="${n}"${n === d.severity ? ' checked' : ''}><span data-sev="${n}">${n} · ${SEVERITY[n]}</span></label>`).join('')}</div></div>
-      <div class="fld span-2"><label for="oNote">Notes</label><textarea id="oNote" rows="3" placeholder="What you saw, where, and what you'll do about it">${esc(d.note)}</textarea></div>
-    </div>`,
-    onOpen: () => {
-      let yearTouched = !!o;
-      const upd = () => {
-        const p = plantingFor(val('oField'), +val('oYear'));
-        if (!p) { $('#oStageList').innerHTML = ''; $('#oStageHint').textContent = 'No crop assigned for this season'; $('#oStage').placeholder = 'e.g. V6'; return; }
-        const st = stageInfo(p), ref = dn(val('oDate') || today());
-        $('#oStageList').innerHTML = st.map(s => `<option value="${esc(s.code)}">${esc(s.name)}</option>`).join('');
-        const onDate = st.filter(s => dn(s.act || s.exp) <= ref).pop();
-        $('#oStageHint').textContent = `${cropById(p.cropId).name}${onDate ? ` · stage on this date: ${onDate.code} (${onDate.name})` : ''}`;
-        $('#oStage').placeholder = onDate ? onDate.code : 'e.g. V6';
-      };
-      const reseason = () => { if (!yearTouched) { const s = suggestSeason(val('oField'), val('oDate')); if (s) { const sel = $('#oYear'); if (![...sel.options].some(x => +x.value === s)) sel.insertAdjacentHTML('afterbegin', `<option value="${s}">${s}</option>`); sel.value = String(s); } } upd(); };
-      $('#oYear').addEventListener('change', () => { yearTouched = true; upd(); });
-      $('#oField').addEventListener('change', reseason); $('#oDate').addEventListener('change', reseason);
-      upd();
-    },
-    onSubmit: () => {
-      const date = val('oDate'); if (!date) return 'Enter the date.';
-      const stage = val('oStage') || $('#oStage').placeholder.replace(/^e\.g\. .*/, '');
-      const data = { date, fieldId: val('oField'), year: +val('oYear'), stage, issue: radio('oIssue') || 'other', severity: +(radio('oSev') || 1), note: val('oNote') };
-      if (o) Object.assign(o, data); else S.observations.push(Object.assign({ id: uid('o') }, data));
-      commit(); toast(o ? 'Observation saved' : 'Observation added');
-    } });
-}
-
 /* ---------- Rain ---------- */
 function openRainModal(id) {
   const r = S.rainfall.find(x => x.id === id); if (!r) return;
@@ -1986,6 +2132,9 @@ const EXPORTS = {
     S.observations.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(o => { const p = plantingFor(o.fieldId, o.year); return [o.date, o.year, (fieldById(o.fieldId) || {}).name, p ? cropById(p.cropId).name : '', o.stage, issueLabel(o.issue), o.severity, o.note]; })) },
   trials: { label: 'Hybrid trials', file: () => `farm-hybrid-trials-${today()}.csv`, build: () => toCSV(['season', 'trial', 'strip', 'entry', 'dealer', 'hybrid', 'type', 'moisture_pct', 'test_weight_lb_bu', 'harvest_weight_lb', 'strip_length_ft', 'strip_width_ft', 'strip_acres', 'bushels', 'yield_bu_ac', 'vs_nearest_checks_bu_ac', 'rank', 'yield_formula'],
     (S.trials || []).flatMap(t => { const R = trialCalc(t); return R.E.map(x => [t.year, t.name, x.order, x.name, x.dealer, x.hybrid, x.type, x.moisture, x.testWeight, x.weight, x.len, R.widthFt || '', x.acres != null ? Math.round(x.acres * 10000) / 10000 : '', x.dryBu != null ? r2(x.dryBu) : '', x.yld != null ? r2(x.yld) : '', x.vsCheck != null ? r2(x.vsCheck) : '', x.rank || '', R.formula]); })) },
+  sales: { label: 'Sales', file: () => `farm-sales-${today()}.csv`, build: () => toCSV(['date', 'season', 'crop', 'field', 'buyer', 'type', 'contract_or_ticket', 'quantity', 'unit', 'price_per_unit', 'futures_per_unit', 'futures_month', 'basis', 'deductions_usd', 'gross_usd', 'net_usd', 'net_per_unit', 'moisture_pct', 'test_weight_lb_bu', 'delivered', 'deliver_by', 'notes'],
+    (S.sales || []).slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(x => { const c = cropById(x.cropId), net = saleNet(x), b = saleBasis(x);
+      return [x.date, x.year, c.name, x.fieldId ? (fieldById(x.fieldId) || {}).name : '', x.buyer, saleTypeLabel(x.type), x.ref, x.quantity, unitPer(c.unit), x.price, x.futures, x.futuresMonth, b == null ? '' : Math.round(b * 10000) / 10000, x.deductions, saleGross(x) == null ? '' : r2(saleGross(x)), net == null ? '' : r2(net), net == null || !x.quantity ? '' : Math.round(net / x.quantity * 10000) / 10000, x.moisture, x.testWeight, x.delivered ? 'yes' : 'no', x.deliverBy, x.notes]; })) },
   rainfall: { label: 'Rainfall', file: () => `farm-rainfall-${today()}.csv`, build: () => toCSV(['date', 'gauge', 'inches'], S.rainfall.slice().sort((a, b) => a.date.localeCompare(b.date)).map(r => [r.date, gaugeName(r.fieldId), r.inches])) },
 };
 async function doExport(kind) {
@@ -2027,7 +2176,7 @@ function openDataModal() {
         <div class="btn-row"><button type="button" class="btn" data-act="save-wx-loc">Save location</button><button type="button" class="btn btn-ghost" data-act="wx-geo">Use this device's location</button></div><p id="wxMsg" class="small" role="status"></p></div>
       <div class="data-sec"><h3>Export</h3><p class="small muted">JSON is a full backup you can import later. CSV files open in Excel or Google Sheets.</p>
         <div class="btn-row"><button type="button" class="btn btn-primary" data-act="export" data-id="json">Download JSON backup</button></div>
-        <div class="btn-row">${['inputs', 'plantings', 'profit', 'trials', 'scouting', 'rainfall'].map(k => `<button type="button" class="btn sm" data-act="export" data-id="${k}">${EXPORTS[k].label} CSV</button>`).join('')}</div>
+        <div class="btn-row">${['inputs', 'plantings', 'profit', 'sales', 'trials', 'rainfall'].map(k => `<button type="button" class="btn sm" data-act="export" data-id="${k}">${EXPORTS[k].label} CSV</button>`).join('')}</div>
         <div id="exportOut" hidden><div class="fld"><label for="exportText" id="exportLbl">File contents</label><textarea id="exportText" rows="6" readonly></textarea><span class="hint" id="exportHint"></span></div><div class="btn-row" style="margin-top:8px"><button type="button" class="btn" data-act="copy-export">Copy to clipboard</button></div></div></div>
       <div class="data-sec"><h3>Import JSON</h3><p class="small muted">Replaces everything currently saved in this browser.</p>
         <div class="fld"><label for="dFile">Choose a JSON backup file</label><input id="dFile" type="file" accept="application/json,.json"></div>
@@ -2698,9 +2847,9 @@ function forecastCard() {
 const SYNC_KEY = 'farmFieldTracker.sync.v1', PRESHARE_KEY = 'farmFieldTracker.beforeShared.v1';
 const SYNC = { mode: /^https?:/.test(location.protocol) ? 'connecting' : 'off', configured: false, empty: false, version: 0, base: null, dirty: false,
   passcode: '', canEdit: false, savedAt: null, pushing: false, again: false, timer: null, error: '', deferred: false, initOk: false };
-const SYNC_COLLS = ['crops', 'fields', 'plantings', 'inputs', 'observations', 'rainfall', 'trials'];
+const SYNC_COLLS = ['crops', 'fields', 'plantings', 'inputs', 'observations', 'rainfall', 'trials', 'sales'];
 const EDIT_ACTS = new Set(['add-field', 'edit-field', 'del-field', 'edit-planting', 'del-planting', 'harvest', 'clear-harvest', 'add-crop', 'edit-crop', 'del-crop',
-  'add-input', 'edit-input', 'del-input', 'add-obs', 'edit-obs', 'del-obs', 'edit-rain', 'del-rain', 'import-trial', 'add-trial', 'edit-trial', 'del-trial',
+  'add-input', 'edit-input', 'del-input', 'add-sale', 'edit-sale', 'del-sale', 'edit-rain', 'del-rain', 'import-trial', 'add-trial', 'edit-trial', 'del-trial',
   'add-entry', 'edit-entry', 'del-entry', 'field-add-trial', 'field-trial-import', 'field-trial-new', 'field-trial-link', 'start-empty', 'reset-sample',
   'save-farm', 'import-paste', 'save-wx-loc', 'sync-init', 'edit-formula']);
 const IN_DATA_MODAL = new Set(['save-farm', 'import-paste', 'save-wx-loc', 'sync-init', 'start-empty', 'reset-sample']);
@@ -2913,9 +3062,9 @@ const ACTIONS = {
   'add-input': () => openInputModal(null),
   'edit-input': id => openInputModal(id),
   'del-input': id => withUndo('Input deleted', () => { S.inputs = S.inputs.filter(x => x.id !== id); }),
-  'add-obs': () => openObsModal(null),
-  'edit-obs': id => openObsModal(id),
-  'del-obs': id => withUndo('Observation deleted', () => { S.observations = S.observations.filter(x => x.id !== id); }),
+  'add-sale': () => openSaleModal(null),
+  'edit-sale': id => openSaleModal(id),
+  'del-sale': id => withUndo('Sale deleted', () => { S.sales = S.sales.filter(x => x.id !== id); }),
   'edit-rain': id => openRainModal(id),
   'del-rain': id => withUndo('Rain reading deleted', () => { S.rainfall = S.rainfall.filter(x => x.id !== id); if (String(id).startsWith('auto-')) S.settings.hiddenAuto = [...new Set([...(S.settings.hiddenAuto || []), id])]; }),
   'toggle-view': id => { UI.tableView[id] = !UI.tableView[id]; render(); },
