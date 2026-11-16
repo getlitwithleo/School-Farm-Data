@@ -17,7 +17,16 @@ Every device that opens the site sees the same records. `src/worker.js` keeps on
 
 - Anyone with the link can view. Adding or changing records needs the farm passcode, entered once per device under **Data & export → Sharing** (or when you first tap an edit button). Capital letters don't matter.
 - The farm manager sets the passcode once from the site (**Data & export → Sharing**), then chooses **Start the shared farm**. It is stored salted and hashed in the Worker's private storage, never in this repo, and can be changed from the same place. A `FARM_PASSCODE` secret in the Cloudflare dashboard (Workers & Pages → school-farm-data → Settings → Variables and Secrets) takes priority if set.
-- After 10 wrong passcodes, a connection waits 15 minutes before it can try again.
+- After 30 wrong passcodes in 15 minutes, a connection waits 15 minutes before it can try again. The limit is high because everyone at school shares one internet connection.
 - If two people save at once, their changes are merged record by record.
 - The last 30 saved versions are kept. Download one under **Data & export → Sharing → Saved versions**, then use **Import JSON** to go back to it.
 - Each browser also keeps its own copy, so the site works without a connection and catches up when it reconnects.
+
+## Yield formulas
+
+Each crop has a bushels-per-acre formula for hybrid trial strips. Edit it with **Edit formula** on the Hybrid Trials tab, or **Yield formula** under Fields → Crops & sell prices.
+
+- Corn's standard formula is `harv. wt × 109.815 × (100 − M) ÷ row length ÷ row width ÷ # of rows`. 109.815 = 43,560 sq ft per acre × 12 in per ft ÷ (85 × 56), for 15% moisture and 56 lb per bushel. Soybeans, wheat, sorghum and oats get the matching number for their own moisture and pounds per bushel.
+- Formulas can use harvest weight, M (moisture), row length, row width, # of rows, test weight, acres, numbers, + − × ÷, parentheses, and min, max, round and abs. They're read safely and never run as code.
+- Saving a formula recalculates every trial's yields, ranks, comparisons with the check strips, dealer averages and $ per acre.
+

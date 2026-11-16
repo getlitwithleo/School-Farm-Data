@@ -14,13 +14,15 @@
 // in this Worker's private storage; it is never in the repo. Passcodes ignore capital letters and spaces
 // at the ends. A FARM_PASSCODE secret set in the Cloudflare dashboard (Workers & Pages →
 // school-farm-data → Settings → Variables and Secrets) takes priority over the stored passcode.
-// After 10 wrong passcodes, a connection has to wait 15 minutes.
+// After 30 wrong passcodes in 15 minutes, a connection has to wait 15 minutes.
 import { DurableObject } from 'cloudflare:workers';
 
 const KEEP_VERSIONS = 30;
 const CHUNK = 256 * 1024; // characters per stored row, well under the 2 MB row limit
 const MAX_BODY = 8 * 1024 * 1024;
-const MAX_FAILS = 10, LOCK_MS = 15 * 60 * 1000;
+// Everyone at school shares one internet address, so the limit is high enough that a few typos
+// don't lock the whole school out, and low enough that guessing the passcode would take years.
+const MAX_FAILS = 30, LOCK_MS = 15 * 60 * 1000;
 
 export class FarmStore extends DurableObject {
   constructor(ctx, env) {
@@ -74,9 +76,9 @@ export class FarmStore extends DurableObject {
   }
 
   getState(known) {
-    const cur = this.current();
-    if (known != null && Number(known) === cur.version) return { ...cur, unchanged: true };
-    return { ...cur, data: cur.version ? JSON.parse(this.read(cur.version)) : null };
+    const cur = this.current(), hasPass = !!this.passInfo().hash;
+    if (known != null && Number(known) === cur.version) return { ...cur, hasPass, unchanged: true };
+    return { ...cur, hasPass, data: cur.version ? JSON.parse(this.read(cur.version)) : null };
   }
 
   putState(baseVersion, text) {
@@ -132,6 +134,14 @@ export default {
 
     const store = env.FARM.get(env.FARM.idFromName('school-farm'));
     const secret = typeof env.FARM_PASSCODE === 'string' && norm(env.FARM_PASSCODE).length >= 4 ? env.FARM_PASSCODE : null;
+    const { pathname } = url, method = request.method;
+
+    // Polls (the most common request) need only one call to storage.
+    if (pathname === '/api/state' && method === 'GET') {
+      const { hasPass, ...state } = await store.getState(url.searchParams.get('known'));
+      return json({ ...state, configured: !!secret || hasPass });
+    }
+
     const stored = secret ? null : await store.passInfo();
     const configured = !!secret || !!(stored && stored.hash);
     const ip = request.headers.get('cf-connecting-ip') || 'local';
@@ -152,11 +162,6 @@ export default {
       if (lockedOut) return json({ error: 'locked', message: 'Too many wrong passcodes. Try again in 15 minutes.' }, 429);
       await sleep(500); return json({ error: 'bad-passcode' }, 401);
     };
-    const { pathname } = url, method = request.method;
-
-    if (pathname === '/api/state' && method === 'GET') {
-      return json({ ...(await store.getState(url.searchParams.get('known'))), configured });
-    }
     if (pathname === '/api/state' && method === 'PUT') {
       if (!configured) return json({ error: 'not-configured' }, 503);
       if (!(await authed())) return denied();

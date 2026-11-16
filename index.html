@@ -492,6 +492,17 @@ tr.blank-row td { color: var(--muted); }
   .header-actions { gap: 6px; }
 }
 
+/* Yield formulas */
+.fx-line { display: inline-block; margin-top: 4px; font-size: 14.5px; }
+.fx-text { font-family: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace; font-size: 16px; min-height: 76px; }
+.fx-ops { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.fx-op { min-width: 48px; min-height: 44px; font-size: 20px; font-weight: 700; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface-2); color: var(--ink); cursor: pointer; }
+.fx-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.fx-chip { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 1px; min-height: 44px; padding: 5px 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--ink); cursor: pointer; text-align: left; }
+.fx-chip b { font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace; font-size: 13.5px; }
+.fx-chip span { font-size: 12px; color: var(--muted); }
+.fx-op:hover, .fx-chip:hover { border-color: var(--green); }
+
 /* ---- School Farm look: emblem blue + corn gold, record-book styling ---- */
 :root {
   --blue: #1b4f8f; --blue-deep: #12355f; --gold: #f2b705; --gold-ink: #5a4300;
@@ -641,6 +652,10 @@ const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const num = v => { if (v === null || v === undefined || v === '') return null; const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/[$,\s]/g, '')); return isFinite(n) ? n : null; };
+const sref = v => String(v ?? '').replace(/[^A-Za-z0-9_.:-]/g, '').slice(0, 80);
+const sid = (v, pre) => sref(v) || uid(pre);
+const sdate = v => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+const cleanStageDates = o => { const out = {}; if (o && typeof o === 'object') for (const [k, v] of Object.entries(o)) { const d = sdate(v); if (d) out[String(k).slice(0, 40)] = d; } return out; };
 const uid = (p = 'id') => p + '_' + Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
 const sum = (arr, fn) => arr.reduce((s, x) => s + (fn ? (fn(x) || 0) : (x || 0)), 0);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -899,21 +914,21 @@ function normalize(d) {
   out.settings = Object.assign({ farmName: 'School Farm' }, d.settings || {});
   const defs = defaultCrops();
   const crops = Array.isArray(d.crops) && d.crops.length ? d.crops : defs;
-  out.crops = crops.map(c => ({ id: String(c.id || uid('c')), name: String(c.name || 'Crop'), unit: UNITS.includes(c.unit) ? c.unit : 'bu/ac',
+  out.crops = crops.map(c => ({ id: sid(c.id, 'c'), name: String(c.name || 'Crop'), unit: UNITS.includes(c.unit) ? c.unit : 'bu/ac',
     price: num(c.price) ?? 0, basis: num(c.basis) ?? 0, autoPrice: c.autoPrice !== false, expectedYield: num(c.expectedYield) ?? 0, seasonDays: num(c.seasonDays) ?? 120,
-    slot: num(c.slot), builtin: !!c.builtin, stages: Array.isArray(c.stages) ? c.stages.filter(s => s && s.code).map(s => ({ code: String(s.code), name: String(s.name || s.code), days: num(s.days) ?? 0 })) : [] }));
+    slot: num(c.slot), builtin: !!c.builtin, yieldFormula: String(c.yieldFormula || ''), stages: Array.isArray(c.stages) ? c.stages.filter(s => s && s.code).map(s => ({ code: String(s.code), name: String(s.name || s.code), days: num(s.days) ?? 0 })) : [] }));
   for (const c of defs) if (!out.crops.some(x => x.id === c.id)) out.crops.push(c);
-  out.fields = (d.fields || []).map(f => ({ id: String(f.id || uid('f')), name: String(f.name || 'Field'), acres: num(f.acres) ?? 0, soil: String(f.soil || ''), location: String(f.location || ''), irrigated: !!f.irrigated }));
-  out.plantings = (d.plantings || []).map(p => ({ id: String(p.id || uid('p')), fieldId: String(p.fieldId), year: num(p.year) ?? new Date().getFullYear(), cropId: String(p.cropId),
-    variety: String(p.variety || ''), acres: num(p.acres), plantDate: p.plantDate || null, expectedHarvest: p.expectedHarvest || null, harvestDate: p.harvestDate || null,
-    expectedYield: num(p.expectedYield), actualYield: num(p.actualYield), price: num(p.price), stageActual: (p.stageActual && typeof p.stageActual === 'object') ? p.stageActual : {}, notes: String(p.notes || '') }));
-  out.inputs = (d.inputs || []).map(i => ({ id: String(i.id || uid('i')), date: i.date || null, fieldId: String(i.fieldId), year: num(i.year) ?? (i.date ? +i.date.slice(0, 4) : new Date().getFullYear()),
+  out.fields = (d.fields || []).map(f => ({ id: sid(f.id, 'f'), name: String(f.name || 'Field'), acres: num(f.acres) ?? 0, soil: String(f.soil || ''), location: String(f.location || ''), irrigated: !!f.irrigated }));
+  out.plantings = (d.plantings || []).map(p => ({ id: sid(p.id, 'p'), fieldId: sref(p.fieldId), year: num(p.year) ?? new Date().getFullYear(), cropId: sref(p.cropId),
+    variety: String(p.variety || ''), acres: num(p.acres), plantDate: sdate(p.plantDate), expectedHarvest: sdate(p.expectedHarvest), harvestDate: sdate(p.harvestDate),
+    expectedYield: num(p.expectedYield), actualYield: num(p.actualYield), price: num(p.price), stageActual: cleanStageDates(p.stageActual), notes: String(p.notes || '') }));
+  out.inputs = (d.inputs || []).map(i => ({ id: sid(i.id, 'i'), date: sdate(i.date), fieldId: sref(i.fieldId), year: num(i.year) ?? (i.date ? +i.date.slice(0, 4) : new Date().getFullYear()),
     category: CATEGORIES.some(c => c.id === i.category) ? i.category : 'equipment', product: String(i.product || ''), rate: num(i.rate), rateUnit: String(i.rateUnit || ''),
     cost: num(i.cost) ?? 0, n: num(i.n), p: num(i.p), k: num(i.k), notes: String(i.notes || '') }));
-  out.observations = (d.observations || []).map(o => ({ id: String(o.id || uid('o')), year: num(o.year) ?? (o.date ? +o.date.slice(0, 4) : new Date().getFullYear()), date: o.date || null,
-    fieldId: String(o.fieldId), stage: String(o.stage || ''), issue: ISSUES.some(x => x.id === o.issue) ? o.issue : 'other', severity: clamp(Math.round(num(o.severity) ?? 1), 1, 5), note: String(o.note || '') }));
+  out.observations = (d.observations || []).map(o => ({ id: sid(o.id, 'o'), year: num(o.year) ?? (o.date ? +String(o.date).slice(0, 4) : new Date().getFullYear()), date: sdate(o.date),
+    fieldId: sref(o.fieldId), stage: String(o.stage || ''), issue: ISSUES.some(x => x.id === o.issue) ? o.issue : 'other', severity: clamp(Math.round(num(o.severity) ?? 1), 1, 5), note: String(o.note || '') }));
   out.trials = Array.isArray(d.trials) ? d.trials.map(normTrial) : seedTrials();
-  out.rainfall = (d.rainfall || []).map(r => ({ id: String(r.id || uid('r')), date: r.date || null, fieldId: String(r.fieldId || 'farm'), inches: num(r.inches) ?? 0 })).filter(r => r.date);
+  out.rainfall = (d.rainfall || []).map(r => ({ id: sid(r.id, 'r'), date: sdate(r.date), fieldId: sref(r.fieldId) || 'farm', inches: num(r.inches) ?? 0 })).filter(r => r.date);
   return out;
 }
 function loadState() {
@@ -1318,7 +1333,7 @@ function viewFields() {
     ${S.crops.map(c => `<tr><td class="rt-title" data-label="Crop"><span class="crop-name"><i class="dot" style="--c:${cropVar(c)}"></i>${esc(c.name)}</span>${c.builtin ? '' : ' <span class="chip">Custom</span>'}</td>
       <td data-label="Unit">${esc(c.unit)}</td><td class="num" data-label="Sell price">${fmtPrice(c.price, c.unit)}${priceSource(c)}</td><td class="num" data-label="Expected yield">${fmtYield(c.expectedYield)} ${esc(c.unit)}</td>
       <td class="num" data-label="Days to harvest">${nf(c.seasonDays)} days</td><td data-label="Growth stages"><span class="small muted">${esc(c.stages.map(s => s.code).join(' · ') || '—')}</span></td>
-      <td class="actions"><button type="button" class="icon-btn" data-act="edit-crop" data-id="${esc(c.id)}" aria-label="Edit ${esc(c.name)}">${ICON.edit}</button>${c.builtin ? '' : `<button type="button" class="icon-btn danger" data-act="del-crop" data-id="${esc(c.id)}" aria-label="Delete ${esc(c.name)}">${ICON.del}</button>`}</td></tr>`).join('')}
+      <td class="actions">${LB_PER_BU[c.id] ? `<button type="button" class="btn btn-ghost sm" data-act="edit-formula" data-id="${esc(c.id)}">Yield formula</button>` : ''}<button type="button" class="icon-btn" data-act="edit-crop" data-id="${esc(c.id)}" aria-label="Edit ${esc(c.name)}">${ICON.edit}</button>${c.builtin ? '' : `<button type="button" class="icon-btn danger" data-act="del-crop" data-id="${esc(c.id)}" aria-label="Delete ${esc(c.name)}">${ICON.del}</button>`}</td></tr>`).join('')}
     </tbody></table></div></section>`;
   return html;
 }
@@ -1392,7 +1407,7 @@ function viewInputs() {
       const npk = i.category === 'fertilizer' && (i.n || i.p || i.k) ? `<div class="small muted">${nf(i.n || 0)}-${nf(i.p || 0)}-${nf(i.k || 0)} lb/ac N-P₂O₅-K₂O</div>` : '';
       return `<tr><td class="rt-title nowrap" data-label="Date">${fmtDate(i.date, true)}</td><td data-label="Field">${esc(f.name || '—')}</td><td data-label="Category"><span class="chip">${esc(catLabel(i.category))}</span></td>
       <td data-label="Product"><div>${esc(i.product)}</div>${npk}</td><td class="num" data-label="Rate">${i.rate != null ? `${nf(i.rate, i.rate % 1 ? 2 : 0)} ${esc(i.rateUnit)}` : '—'}</td><td class="num" data-label="Cost">${money(i.cost, 2)}</td><td class="num" data-label="$/ac">${money(ac ? i.cost / ac : 0, 2)}</td>
-      <td class="actions"><button type="button" class="icon-btn" data-act="edit-input" data-id="${i.id}" aria-label="Edit entry">${ICON.edit}</button><button type="button" class="icon-btn danger" data-act="del-input" data-id="${i.id}" aria-label="Delete entry">${ICON.del}</button></td></tr>`; }).join('')}
+      <td class="actions"><button type="button" class="icon-btn" data-act="edit-input" data-id="${esc(i.id)}" aria-label="Edit entry">${ICON.edit}</button><button type="button" class="icon-btn danger" data-act="del-input" data-id="${esc(i.id)}" aria-label="Delete entry">${ICON.del}</button></td></tr>`; }).join('')}
     </tbody></table></div>${list.length > LIMIT && !UI.showAllInputs ? `<div class="more-row"><button type="button" class="btn" data-act="more-inputs">Show all ${list.length} entries</button></div>` : ''}` : '<p class="muted">No input entries for this selection yet.</p>'}
   </section>`;
 }
@@ -1416,7 +1431,7 @@ function viewScouting() {
       ${obs.length ? `<div class="obs-list">${obs.map(o => { const f = fieldById(o.fieldId) || {}; const p = plantingFor(o.fieldId, o.year); const c = p ? cropById(p.cropId) : null;
         return `<article class="obs" data-sev="${o.severity}"><div class="obs-main"><div class="obs-top"><span class="date">${fmtDate(o.date, true)}</span><span class="pill sev-pill" data-sev="${o.severity}">${o.severity >= 4 ? ICON.alert : ''}${o.severity} · ${SEVERITY[o.severity]}</span><span class="chip">${esc(issueLabel(o.issue))}</span></div>
           <div class="small"><b>${esc(f.name || '—')}</b>${c ? ` · ${esc(c.name)}` : ''}${o.stage ? ` · stage ${esc(o.stage)}` : ''}</div>${o.note ? `<p class="obs-note">${esc(o.note)}</p>` : ''}</div>
-          <div class="obs-actions"><button type="button" class="icon-btn" data-act="edit-obs" data-id="${o.id}" aria-label="Edit observation">${ICON.edit}</button><button type="button" class="icon-btn danger" data-act="del-obs" data-id="${o.id}" aria-label="Delete observation">${ICON.del}</button></div></article>`; }).join('')}</div>` : '<p class="muted">No observations for this selection yet.</p>'}
+          <div class="obs-actions"><button type="button" class="icon-btn" data-act="edit-obs" data-id="${esc(o.id)}" aria-label="Edit observation">${ICON.edit}</button><button type="button" class="icon-btn danger" data-act="del-obs" data-id="${esc(o.id)}" aria-label="Delete observation">${ICON.del}</button></div></article>`; }).join('')}</div>` : '<p class="muted">No observations for this selection yet.</p>'}
     </section>
     <section class="card"><div class="card-head"><div><h3>Rainfall log</h3><p class="sub">Inches per reading · farm-wide gauge or a field's own gauge</p></div></div>
       ${autoRainNote()}<form class="quick" id="rainQuick" novalidate>
@@ -1428,7 +1443,7 @@ function viewScouting() {
       <div class="rain-summary"><div><span>${esc(gaugeName(mainGauge))} ${y}</span><b>${nf(gTotal, 2)} in</b></div><div><span>Rain days</span><b>${g.length}</b></div><div><span>Largest</span><b>${big ? nf(big.inches, 2) + ' in' : '—'}</b>${big ? `<div class="small muted">${fmtDate(big.date)}</div>` : ''}</div></div>
       ${shownRain.length ? `<div class="table-wrap"><table class="rtable"><thead><tr><th>Date</th><th>Gauge</th><th class="num">Inches</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>
         ${shownRain.map(r => `<tr><td class="rt-title" data-label="Date">${fmtDate(r.date, true)}</td><td data-label="Gauge">${esc(gaugeName(r.fieldId))}${String(r.id).startsWith('auto-') ? ' <span class="auto-tag">auto</span>' : ''}</td><td class="num" data-label="Inches">${nf(r.inches, 2)} in</td>
-        <td class="actions"><button type="button" class="icon-btn" data-act="edit-rain" data-id="${r.id}" aria-label="Edit reading">${ICON.edit}</button><button type="button" class="icon-btn danger" data-act="del-rain" data-id="${r.id}" aria-label="Delete reading">${ICON.del}</button></td></tr>`).join('')}
+        <td class="actions"><button type="button" class="icon-btn" data-act="edit-rain" data-id="${esc(r.id)}" aria-label="Edit reading">${ICON.edit}</button><button type="button" class="icon-btn danger" data-act="del-rain" data-id="${esc(r.id)}" aria-label="Delete reading">${ICON.del}</button></td></tr>`).join('')}
       </tbody></table></div>${rain.length > LIMIT && !UI.showAllRain ? `<div class="more-row"><button type="button" class="btn" data-act="more-rain">Show all ${rain.length} readings</button></div>` : ''}` : '<p class="muted">No rainfall logged for this season.</p>'}
     </section>
   </div>`;
@@ -1456,7 +1471,7 @@ function viewYield() {
       <td class="num" data-label="Cost/ac">${money(e.costAc)}</td><td class="num" data-label="Net profit"><span class="${e.net >= 0 ? 'pos' : 'neg'}">${money(e.net)}</span></td>
       <td class="num" data-label="Profit/ac"><span class="${e.netAc >= 0 ? 'pos' : 'neg'}">${signedMoney(e.netAc)}</span></td>
       <td class="num" data-label="Break-even price">${fmtPrice(e.bePrice, e.crop.unit)}</td><td class="num" data-label="Break-even yield">${fmtYield(e.beYield)} ${esc(e.crop.unit)}</td>
-      <td class="actions"><button type="button" class="btn sm${e.harvested ? '' : ' btn-primary'}" data-act="harvest" data-id="${e.p.id}">${e.harvested ? 'Edit' : 'Record harvest'}</button></td></tr>`).join('')}
+      <td class="actions"><button type="button" class="btn sm${e.harvested ? '' : ' btn-primary'}" data-act="harvest" data-id="${esc(e.p.id)}">${e.harvested ? 'Edit' : 'Record harvest'}</button></td></tr>`).join('')}
     </tbody><tfoot><tr><td class="rt-title" data-label="">Total</td><td data-label=""></td><td class="num" data-label="Acres">${nf(acres)}</td><td data-label=""></td><td data-label=""></td><td data-label=""></td><td data-label=""></td>
       <td class="num" data-label="Gross revenue">${money(rev)}</td><td class="num" data-label="Total cost">${money(cost)}</td><td class="num" data-label="Cost/ac">${money(acres ? cost / acres : 0)}</td>
       <td class="num" data-label="Net profit"><span class="${net >= 0 ? 'pos' : 'neg'}">${money(net)}</span></td><td class="num" data-label="Profit/ac"><span class="${net >= 0 ? 'pos' : 'neg'}">${signedMoney(acres ? net / acres : 0)}</span></td><td data-label=""></td><td data-label=""></td><td data-label=""></td></tr></tfoot></table></div>` : '<p class="muted">No planted fields for this selection.</p>'}
@@ -1969,8 +1984,8 @@ const EXPORTS = {
     S.plantings.slice().sort((a, b) => a.year - b.year || fieldOrder(a.fieldId) - fieldOrder(b.fieldId)).filter(p => fieldById(p.fieldId)).map(p => { const e = econ(p); return [p.year, e.field.name, e.crop.name, e.acres, e.crop.unit, e.expY, e.act, e.harvested ? 'harvested' : 'projected', e.price, r2(e.revenue), r2(e.cost), r2(e.costAc), r2(e.net), r2(e.netAc), e.bePrice != null ? Math.round(e.bePrice * 1000) / 1000 : '', e.beYield != null ? r2(e.beYield) : '', r2(seasonRain(p).total)]; })) },
   scouting: { label: 'Scouting', file: () => `farm-scouting-${today()}.csv`, build: () => toCSV(['date', 'season', 'field', 'crop', 'growth_stage', 'issue', 'severity_1_5', 'notes'],
     S.observations.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(o => { const p = plantingFor(o.fieldId, o.year); return [o.date, o.year, (fieldById(o.fieldId) || {}).name, p ? cropById(p.cropId).name : '', o.stage, issueLabel(o.issue), o.severity, o.note]; })) },
-  trials: { label: 'Hybrid trials', file: () => `farm-hybrid-trials-${today()}.csv`, build: () => toCSV(['season', 'trial', 'strip', 'entry', 'dealer', 'hybrid', 'type', 'moisture_pct', 'test_weight_lb_bu', 'harvest_weight_lb', 'strip_length_ft', 'strip_width_ft', 'strip_acres', 'dry_bu', 'dry_yield_bu_ac', 'vs_nearest_checks_bu_ac', 'rank'],
-    (S.trials || []).flatMap(t => { const R = trialCalc(t); return R.E.map(x => [t.year, t.name, x.order, x.name, x.dealer, x.hybrid, x.type, x.moisture, x.testWeight, x.weight, x.len, R.widthFt || '', x.acres != null ? Math.round(x.acres * 10000) / 10000 : '', x.dryBu != null ? r2(x.dryBu) : '', x.yld != null ? r2(x.yld) : '', x.vsCheck != null ? r2(x.vsCheck) : '', x.rank || '']); })) },
+  trials: { label: 'Hybrid trials', file: () => `farm-hybrid-trials-${today()}.csv`, build: () => toCSV(['season', 'trial', 'strip', 'entry', 'dealer', 'hybrid', 'type', 'moisture_pct', 'test_weight_lb_bu', 'harvest_weight_lb', 'strip_length_ft', 'strip_width_ft', 'strip_acres', 'bushels', 'yield_bu_ac', 'vs_nearest_checks_bu_ac', 'rank', 'yield_formula'],
+    (S.trials || []).flatMap(t => { const R = trialCalc(t); return R.E.map(x => [t.year, t.name, x.order, x.name, x.dealer, x.hybrid, x.type, x.moisture, x.testWeight, x.weight, x.len, R.widthFt || '', x.acres != null ? Math.round(x.acres * 10000) / 10000 : '', x.dryBu != null ? r2(x.dryBu) : '', x.yld != null ? r2(x.yld) : '', x.vsCheck != null ? r2(x.vsCheck) : '', x.rank || '', R.formula]); })) },
   rainfall: { label: 'Rainfall', file: () => `farm-rainfall-${today()}.csv`, build: () => toCSV(['date', 'gauge', 'inches'], S.rainfall.slice().sort((a, b) => a.date.localeCompare(b.date)).map(r => [r.date, gaugeName(r.fieldId), r.inches])) },
 };
 async function doExport(kind) {
@@ -2100,21 +2115,175 @@ function seedTrials() {
   return r.trials.map(t => makeTrial(t, { year: 2026, rows: 8, rowSpacing: 30, stdMoisture: 15, notes: 'Imported from the farm\'s hybrid plot spreadsheet. Strip length came from the Buffer row; confirm rows and row spacing.' }));
 }
 function normTrial(t) {
-  return { id: String(t.id || uid('t')), name: String(t.name || 'Trial'), year: num(t.year) ?? new Date().getFullYear(), cropId: String(t.cropId || 'corn'), fieldId: t.fieldId ? String(t.fieldId) : null,
+  return { id: sid(t.id, 't'), name: String(t.name || 'Trial'), year: num(t.year) ?? new Date().getFullYear(), cropId: sref(t.cropId) || 'corn', fieldId: sref(t.fieldId) || null,
     location: String(t.location || ''), stripLength: num(t.stripLength), rows: num(t.rows), rowSpacing: num(t.rowSpacing), stdMoisture: num(t.stdMoisture), price: num(t.price), notes: String(t.notes || ''),
-    entries: (Array.isArray(t.entries) ? t.entries : []).map((e, i) => ({ id: String(e.id || uid('e')), order: num(e.order) ?? i + 1, name: String(e.name || ''), type: ['entry', 'check', 'buffer'].includes(e.type) ? e.type : 'entry',
+    entries: (Array.isArray(t.entries) ? t.entries : []).map((e, i) => ({ id: sid(e.id, 'e'), order: num(e.order) ?? i + 1, name: String(e.name || ''), type: ['entry', 'check', 'buffer'].includes(e.type) ? e.type : 'entry',
       dealer: String(e.dealer || ''), hybrid: String(e.hybrid || ''), moisture: num(e.moisture), testWeight: num(e.testWeight), weight: num(e.weight), length: num(e.length), notes: String(e.notes || '') })) };
 }
-function trialCalc(t) {
+
+/* ---------- Yield formulas: typed by the farm, read safely (never run as code) ---------- */
+const FX_VARS = [
+  { name: 'weight', short: 'harv. wt', label: 'Harvest weight (lb)' },
+  { name: 'M', short: 'M', label: 'Moisture (%)' },
+  { name: 'length', short: 'row length', label: 'Row length (ft)' },
+  { name: 'rowWidth', short: 'row width', label: 'Row width (in)' },
+  { name: 'rows', short: '# of rows', label: 'Number of rows harvested' },
+  { name: 'testWeight', short: 'test wt', label: 'Test weight (lb/bu)' },
+  { name: 'acres', short: 'acres', label: 'Strip acres' },
+  { name: 'lbPerBu', short: 'lb/bu', label: 'Pounds per bushel for the crop' },
+  { name: 'stdMoisture', short: 'std M', label: 'Standard moisture (%)' },
+];
+const FX_ALIASES = Object.assign(Object.create(null), { moisture: 'M', rowspacing: 'rowWidth', wt: 'weight' });
+FX_VARS.forEach(v => { FX_ALIASES[v.name.toLowerCase()] = v.name; });
+const FX_PHRASES = [
+  [/harv(?:est)?\.?\s*(?:wt|weight)\.?/gi, 'weight'], [/test\s*(?:wt|weight)\.?/gi, 'testWeight'], [/#\s*of\s*rows|number\s+of\s+rows/gi, 'rows'],
+  [/row\s+length/gi, 'length'], [/row\s+(?:width|spacing)/gi, 'rowWidth'], [/std\.?\s*M\b|standard\s+moisture/gi, 'stdMoisture'], [/lb\s*\/\s*bu/gi, 'lbPerBu'],
+];
+const FX_FUNCS = Object.assign(Object.create(null), { min: Math.min, max: Math.max, abs: Math.abs, round: (x, d = 0) => { const k = 10 ** d; return Math.round(x * k) / k; } });
+const FX_EXAMPLE = { weight: 3000, M: 20, length: 822, rowWidth: 30, rows: 6, testWeight: 55, acres: 822 * 15 / 43560, lbPerBu: 56, stdMoisture: 15 };
+const FX_CACHE = new Map();
+function fxTokens(src) {
+  let text = String(src || '').replace(/[×✕✖∗]/g, '*').replace(/÷/g, '/').replace(/[−–—]/g, '-');
+  // Accept the farm's own wording too, e.g. "harv. wt X 109.815 X (100-M)/row length/row width/# of rows".
+  for (const [re, name] of FX_PHRASES) text = text.replace(re, ' ' + name + ' ');
+  const out = [];
+  for (let i = 0; i < text.length;) {
+    const ch = text[i], rest = text.slice(i);
+    if (/\s/.test(ch)) { i++; continue; }
+    const n = rest.match(/^(\d+\.?\d*|\.\d+)/);
+    if (n) { out.push({ t: 'n', v: parseFloat(n[1]) }); i += n[1].length; continue; }
+    const id = rest.match(/^[A-Za-z_][A-Za-z0-9_]*/);
+    if (id) { out.push({ t: 'id', v: id[0] }); i += id[0].length; continue; }
+    if ('+-*/^(),'.includes(ch)) { out.push({ t: 'op', v: ch }); i++; continue; }
+    throw new Error(`"${ch}" can't be used in a formula. Use numbers, the names below, and + − × ÷ ( ).`);
+  }
+  // A lone x or X between two values means "times", as in "harv. wt X 109.815".
+  const isVal = t => t && (t.t === 'n' || t.t === 'id' || (t.t === 'op' && t.v === ')'));
+  const startsVal = t => t && (t.t === 'n' || t.t === 'id' || (t.t === 'op' && t.v === '('));
+  out.forEach((t, k) => { if (t.t === 'id' && /^x$/i.test(t.v) && isVal(out[k - 1]) && startsVal(out[k + 1])) out[k] = { t: 'op', v: '*' }; });
+  return out;
+}
+function fxCompile(src) {
+  const toks = fxTokens(src); let pos = 0; const used = new Set();
+  const peekOp = v => toks[pos] && toks[pos].t === 'op' && toks[pos].v === v;
+  const expr = () => { let n = term(); while (peekOp('+') || peekOp('-')) { const op = toks[pos++].v; n = { op, a: n, b: term() }; } return n; };
+  const term = () => { let n = power(); while (peekOp('*') || peekOp('/')) { const op = toks[pos++].v; n = { op, a: n, b: power() }; } return n; };
+  const power = () => { const n = unary(); if (peekOp('^')) { pos++; return { op: '^', a: n, b: power() }; } return n; };
+  const unary = () => { if (peekOp('-')) { pos++; return { op: 'neg', a: unary() }; } if (peekOp('+')) { pos++; return unary(); } return primary(); };
+  const primary = () => {
+    const t = toks[pos++];
+    if (!t) throw new Error('The formula ends too soon. Something is missing after the last symbol.');
+    if (t.t === 'n') return { num: t.v };
+    if (t.t === 'op' && t.v === '(') { const n = expr(); if (!peekOp(')')) throw new Error('A "(" is missing its ")".'); pos++; return n; }
+    if (t.t === 'id') {
+      if (peekOp('(')) {
+        const fn = FX_FUNCS[t.v.toLowerCase()];
+        if (!fn) throw new Error(`"${t.v}" isn't something the formula can do. You can use min, max, round and abs.`);
+        pos++; const args = [];
+        if (!peekOp(')')) { args.push(expr()); while (peekOp(',')) { pos++; args.push(expr()); } }
+        if (!peekOp(')')) throw new Error(`"${t.v}(" is missing its ")".`);
+        pos++; return { fn, args };
+      }
+      const name = FX_ALIASES[t.v.toLowerCase()];
+      if (!name) throw new Error(`"${t.v}" isn't a name the formula knows. Use ${FX_VARS.map(v => v.name).join(', ')}.`);
+      used.add(name); return { v: name };
+    }
+    throw new Error(`"${t.v}" is in the wrong place.`);
+  };
+  if (!toks.length) throw new Error('Type a formula.');
+  const ast = expr();
+  if (pos < toks.length) throw new Error(`"${toks[pos].v}" is in the wrong place. Check for a missing × or ÷.`);
+  return { ast, used: [...used] };
+}
+function fxGet(src) {
+  const key = String(src || '');
+  if (!FX_CACHE.has(key)) { try { FX_CACHE.set(key, { ok: fxCompile(key) }); } catch (e) { FX_CACHE.set(key, { err: e.message }); } }
+  return FX_CACHE.get(key);
+}
+function fxEval(c, vars) {
+  for (const u of c.used) if (vars[u] == null || !isFinite(vars[u])) return null;
+  const ev = n => n.num != null ? n.num : n.v ? vars[n.v] : n.fn ? n.fn(...n.args.map(ev)) : n.op === 'neg' ? -ev(n.a)
+    : n.op === '+' ? ev(n.a) + ev(n.b) : n.op === '-' ? ev(n.a) - ev(n.b) : n.op === '*' ? ev(n.a) * ev(n.b) : n.op === '/' ? ev(n.a) / ev(n.b) : Math.pow(ev(n.a), ev(n.b));
+  const r = ev(c.ast);
+  return isFinite(r) ? r : null;
+}
+function fxPretty(src) {
+  try {
+    const short = Object.fromEntries(FX_VARS.map(v => [v.name, v.short]));
+    return fxTokens(src).map(t => t.t === 'n' ? String(t.v) : t.t === 'id' ? (short[FX_ALIASES[t.v.toLowerCase()]] || t.v) : ({ '*': '×', '/': '÷', '-': '−' }[t.v] || t.v))
+      .join(' ').replace(/\( /g, '(').replace(/ \)/g, ')').replace(/ ,/g, ',');
+  } catch (e) { return String(src || ''); }
+}
+// Standard formula: 43,560 sq ft/ac × 12 in/ft ÷ ((100 − standard moisture) × lb per bu). Corn: 109.815.
+function defaultYieldFormula(c) {
+  if (c.unit === 'lb/ac') return 'weight * 522720 / length / rowWidth / rows';
+  if (c.unit === 'tons/ac') return 'weight * 522720 / 2000 / length / rowWidth / rows';
+  const std = STD_MOIST[c.id] ?? 15, lb = LB_PER_BU[c.id] ?? 56;
+  return `weight * ${Math.round(522720 / ((100 - std) * lb) * 1000) / 1000} * (100 - M) / length / rowWidth / rows`;
+}
+const cropFormula = c => (c && String(c.yieldFormula || '').trim()) || defaultYieldFormula(c || FALLBACK_CROP);
+function insertAtCursor(ta, text) {
+  const a = ta.selectionStart ?? ta.value.length, b = ta.selectionEnd ?? a;
+  ta.value = ta.value.slice(0, a) + text + ta.value.slice(b);
+  ta.selectionStart = ta.selectionEnd = a + text.length; ta.focus();
+}
+function openFormulaModal(cropId) {
+  const c = S.crops.find(x => x.id === cropId); if (!c) return;
+  const std = defaultYieldFormula(c);
+  const trials = (S.trials || []).filter(t => t.cropId === c.id);
+  const pick = trials.find(t => t.id === UI.trialId) || trials[0] || null;
+  const ops = [['×', ' * '], ['÷', ' / '], ['+', ' + '], ['−', ' - '], ['(', '('], [')', ')']]
+    .map(([l, ins]) => `<button type="button" class="fx-op" data-ins="${esc(ins)}" aria-label="Add ${l}">${l}</button>`).join('');
+  const chips = FX_VARS.map(v => `<button type="button" class="fx-chip" data-ins="${v.name}"><b>${esc(v.name)}</b><span>${esc(v.label)}</span></button>`).join('');
+  openModal({ title: `${c.name} yield formula`, submitLabel: 'Save formula', wide: true,
+    body: `<p>This formula turns each trial strip's numbers into bushels per acre. Tap a symbol or a name to add it where the cursor is, or type it. Spaces don't matter, and x means times.</p>
+      <div class="fld" style="margin-top:12px"><label for="fxText">Formula</label><textarea id="fxText" class="fx-text" rows="3" spellcheck="false" autocomplete="off" autocapitalize="off">${esc(cropFormula(c))}</textarea><span class="hint" id="fxPretty"></span></div>
+      <div class="fx-ops">${ops}</div><div class="fx-chips">${chips}</div>
+      <p class="form-error" id="fxErr" role="alert" style="margin-top:8px"></p>
+      <div class="calc" id="fxPrev" aria-live="polite"></div>
+      <div class="btn-row" style="margin-top:10px"><button type="button" class="btn btn-ghost sm" id="fxReset">Use the standard ${esc(c.name.toLowerCase())} formula</button></div>`,
+    onOpen: () => {
+      const ta = $('#fxText');
+      const upd = () => {
+        const src = ta.value, r = fxGet(src);
+        $('#fxPretty').textContent = r.ok ? 'Reads as: ' + fxPretty(src) : '';
+        $('#fxErr').textContent = r.err || '';
+        if (!r.ok) { $('#fxPrev').textContent = ''; return; }
+        if (pick) {
+          const R = trialCalc(pick, src), shown = R.E.filter(x => x.yld != null).slice(0, 4);
+          $('#fxPrev').innerHTML = shown.length ? `<b>With ${esc(pick.name)}:</b><br>${shown.map(x => `${esc(x.name)}: ${nf(x.weight)} lb at ${nf(x.moisture, 1)}% → <b>${nf(x.yld, 1)} bu/ac</b>`).join('<br>')}${R.plotAvg != null ? `<br>Entry average: <b>${nf(R.plotAvg, 1)} bu/ac</b>` : ''}`
+            : `This formula needs values the ${esc(pick.name)} strips don't have yet (${esc(fxGet(src).ok.used.join(', '))}).`;
+        } else {
+          const v = fxEval(r.ok, FX_EXAMPLE);
+          $('#fxPrev').innerHTML = `Example: 3,000 lb at 20% moisture, 822 ft × 6 rows at 30 in → <b>${v == null ? 'no result' : nf(v, 1) + ' bu/ac'}</b>`;
+        }
+      };
+      ta.addEventListener('input', upd);
+      $$('[data-ins]', $('#modalRoot')).forEach(b => b.addEventListener('click', () => { insertAtCursor(ta, b.dataset.ins); upd(); }));
+      $('#fxReset').addEventListener('click', () => { ta.value = std; upd(); });
+      upd();
+    },
+    onSubmit: () => {
+      const src = $('#fxText').value.trim(), r = fxGet(src);
+      if (!r.ok) return r.err || 'Check the formula.';
+      if (fxEval(r.ok, FX_EXAMPLE) == null) return 'The formula doesn\'t give a number with sample values. Check that nothing is divided by zero.';
+      c.yieldFormula = src.replace(/\s+/g, ' ') === std ? '' : src;
+      commit(); toast(`${c.name} formula saved. Every ${c.name.toLowerCase()} trial was recalculated.`);
+    } });
+}
+
+function trialCalc(t, formulaOverride) {
   const crop = cropById(t.cropId), lbBu = LB_PER_BU[t.cropId] || 56;
+  const formula = formulaOverride != null ? String(formulaOverride) : cropFormula(crop), fx = fxGet(formula);
   const std = num(t.stdMoisture) ?? (STD_MOIST[t.cropId] ?? 15);
   const widthFt = (num(t.rows) || 0) * (num(t.rowSpacing) || 0) / 12;
   const price = num(t.price) ?? crop.price;
   const E = t.entries.slice().sort((a, b) => a.order - b.order).map(e => {
     const len = num(e.length) ?? num(t.stripLength);
     const acres = len && widthFt ? len * widthFt / 43560 : null;
-    const dryBu = e.weight != null && e.moisture != null ? e.weight * (100 - e.moisture) / (100 - std) / lbBu : null;
-    const yld = dryBu != null && acres ? dryBu / acres : null;
+    const vars = { weight: e.weight, M: e.moisture, length: len, rowWidth: num(t.rowSpacing), rows: num(t.rows), testWeight: e.testWeight, acres, lbPerBu: lbBu, stdMoisture: std };
+    const yld = fx.ok && e.weight != null ? fxEval(fx.ok, vars) : null;
+    const dryBu = yld != null && acres ? yld * acres : null;
     return Object.assign({}, e, { len, acres, dryBu, yld, rev: yld != null ? yld * price : null, rank: null, vsCheck: null, checkRef: null });
   });
   const checks = E.filter(x => x.type === 'check' && x.yld != null);
@@ -2130,7 +2299,7 @@ function trialCalc(t) {
   for (const x of scored) { let g = dealers.find(d => d.dealer === (x.dealer || '—')); if (!g) { g = { dealer: x.dealer || '—', items: [] }; dealers.push(g); } g.items.push(x); }
   dealers.forEach(g => { g.yld = avg(g.items, x => x.yld); g.moist = avg(g.items, x => x.moisture); g.tw = avg(g.items, x => x.testWeight); g.best = g.items[0]; });
   dealers.sort((a, b) => b.yld - a.yld);
-  return { t, crop, std, lbBu, widthFt, price, E, scored, checks, dealers, checkAvg: avg(checks, c => c.yld), plotAvg: avg(scored, x => x.yld),
+  return { t, crop, std, lbBu, widthFt, price, formula, fx, E, scored, checks, dealers, checkAvg: avg(checks, c => c.yld), plotAvg: avg(scored, x => x.yld),
     moistAvg: avg(scored, x => x.moisture), twAvg: avg(scored, x => x.testWeight), stripAcres: num(t.stripLength) && widthFt ? num(t.stripLength) * widthFt / 43560 : null };
 }
 function trialsInView() {
@@ -2151,9 +2320,10 @@ function viewTrials() {
   const sel = list.length > 1 ? `<label class="sr-only" for="trialSel">Trial</label><select id="trialSel" style="width:auto;min-width:200px">${list.map(x => `<option value="${esc(x.id)}"${x.id === t.id ? ' selected' : ''}>${esc(x.name)}${x.fieldId && fieldById(x.fieldId) ? ' · ' + esc(fieldById(x.fieldId).name) : ''} (${x.entries.length} strips)</option>`).join('')}</select>` : '';
   const f = t.fieldId ? fieldById(t.fieldId) : null;
   let html = `<div class="toolbar"><div><h2>Hybrid trials</h2><p>${esc(t.name)} · ${t.year} · ${esc(R.crop.name)} · ${t.entries.length} strips, ${weighed} weighed${f ? ` · ${esc(f.name)}` : ''}${t.location ? ` · ${esc(t.location)}` : ''}</p></div><div class="toolbar-actions">${sel}${btns}</div></div>`;
-  const setup = `Strips ${nf(num(t.stripLength), 1)} ft long × ${nf(num(t.rows))} rows at ${nf(num(t.rowSpacing))} in (${nf(R.widthFt, 1)} ft) = ${R.stripAcres ? nf(R.stripAcres, 3) : '—'} ac each · dry yield at ${nf(R.std, 1)}% moisture, ${R.lbBu} lb/bu · ${fmtPrice(R.price, R.crop.unit)}`;
-  html += `<section class="card trial-setup"><p>${setup}</p><div class="btn-row"><button type="button" class="btn sm" data-act="edit-trial" data-id="${esc(t.id)}">Edit trial settings</button><button type="button" class="btn sm" data-act="add-entry" data-id="${esc(t.id)}">+ Add strip</button><button type="button" class="btn btn-ghost sm danger" data-act="del-trial" data-id="${esc(t.id)}">Delete trial</button></div></section>`;
-  if (!R.stripAcres) html += `<div class="banner warn" role="alert"><p>Enter the strip length, rows and row spacing in the trial settings to calculate bu/ac.</p></div>`;
+  const setup = `Strips ${nf(num(t.stripLength), 1)} ft long × ${nf(num(t.rows))} rows at ${nf(num(t.rowSpacing))} in (${nf(R.widthFt, 1)} ft) = ${R.stripAcres ? nf(R.stripAcres, 3) : '—'} ac each · ${fmtPrice(R.price, R.crop.unit)}<br><span class="fx-line">Yield formula (${esc(R.crop.name)}): <b>${esc(fxPretty(R.formula))}</b></span>`;
+  html += `<section class="card trial-setup"><p>${setup}</p><div class="btn-row"><button type="button" class="btn sm" data-act="edit-trial" data-id="${esc(t.id)}">Edit trial settings</button><button type="button" class="btn sm" data-act="edit-formula" data-id="${esc(t.cropId)}">Edit formula</button><button type="button" class="btn sm" data-act="add-entry" data-id="${esc(t.id)}">+ Add strip</button><button type="button" class="btn btn-ghost sm danger" data-act="del-trial" data-id="${esc(t.id)}">Delete trial</button></div></section>`;
+  if (R.fx.err) html += `<div class="banner warn" role="alert"><p>The ${esc(R.crop.name.toLowerCase())} yield formula has a problem, so yields can't be calculated: ${esc(R.fx.err)}</p><div class="btns"><button type="button" class="btn sm" data-act="edit-formula" data-id="${esc(t.cropId)}">Fix the formula</button></div></div>`;
+  else if (!R.stripAcres) html += `<div class="banner warn" role="alert"><p>Enter the strip length, rows and row spacing in the trial settings to calculate bu/ac.</p></div>`;
   const top = R.scored[0];
   const lowM = R.scored.slice().sort((a, b) => a.moisture - b.moisture)[0];
   const sgn = v => (v >= 0 ? '+' : '−') + nf(Math.abs(v), 1);
@@ -2166,13 +2336,13 @@ function viewTrials() {
 
   // Charts
   const ranked = R.E.filter(x => x.yld != null && x.type !== 'buffer').sort((a, b) => b.yld - a.yld);
-  const cYield = chartCard({ key: 'trial-yield', title: 'Dry yield by entry', sub: `bu/ac at ${nf(R.std, 1)}% moisture · highest first`, height: Math.max(240, ranked.length * 26 + 50),
+  const cYield = chartCard({ key: 'trial-yield', title: 'Yield by entry', sub: `bu/ac from the ${esc(R.crop.name.toLowerCase())} formula · highest first`, height: Math.max(240, ranked.length * 26 + 50),
     legend: legendItem('var(--act)', 'Entry') + legendItem('var(--exp)', 'Check strip') + (R.checkAvg != null ? legendItem('var(--ink-2)', `Check average ${nf(R.checkAvg, 1)}`, true) : ''),
     empty: ranked.length ? null : 'No strips weighed yet.',
-    aria: `Bar chart of dry yield by entry: ${ranked.map(x => `${x.name} ${nf(x.yld, 1)}`).join(', ')}`,
-    table: { head: [{ t: 'Entry' }, { t: 'Dealer' }, { t: 'Dry yield', num: 1 }, { t: 'vs checks', num: 1 }], rows: ranked.map(x => [esc(x.name) + (x.type === 'check' ? ' <span class="chip">Check</span>' : ''), esc(x.dealer || '—'), nf(x.yld, 1) + ' bu/ac', x.vsCheck != null ? `<span class="${x.vsCheck >= 0 ? 'pos' : 'neg'}">${sgn(x.vsCheck)}</span>` : '—']),
-      bar: { vals: ranked.map(x => x.yld), color: i => ranked[i].type === 'check' ? 'var(--exp)' : 'var(--act)', label: 'Dry yield' } },
-    build: () => ({ type: 'bar', data: { labels: ranked.map(x => x.name), datasets: [{ label: 'Dry yield', data: ranked.map(x => r2(x.yld)), backgroundColor: ranked.map(x => css(x.type === 'check' ? '--exp' : '--act')) }] },
+    aria: `Bar chart of yield by entry: ${ranked.map(x => `${x.name} ${nf(x.yld, 1)}`).join(', ')}`,
+    table: { head: [{ t: 'Entry' }, { t: 'Dealer' }, { t: 'Yield', num: 1 }, { t: 'vs checks', num: 1 }], rows: ranked.map(x => [esc(x.name) + (x.type === 'check' ? ' <span class="chip">Check</span>' : ''), esc(x.dealer || '—'), nf(x.yld, 1) + ' bu/ac', x.vsCheck != null ? `<span class="${x.vsCheck >= 0 ? 'pos' : 'neg'}">${sgn(x.vsCheck)}</span>` : '—']),
+      bar: { vals: ranked.map(x => x.yld), color: i => ranked[i].type === 'check' ? 'var(--exp)' : 'var(--act)', label: 'Yield' } },
+    build: () => ({ type: 'bar', data: { labels: ranked.map(x => x.name), datasets: [{ label: 'Yield', data: ranked.map(x => r2(x.yld)), backgroundColor: ranked.map(x => css(x.type === 'check' ? '--exp' : '--act')) }] },
       meta: { fmt: v => `${nf(v, 1)} bu/ac`, title: i => `${ranked[i].name}${ranked[i].dealer && ranked[i].type === 'entry' ? ' · ' + ranked[i].dealer : ''}`, valueLabel: v => nf(v, 1),
         note: i => { const x = ranked[i]; return `${nf(x.moisture, 1)}% moisture · ${x.testWeight != null ? nf(x.testWeight, 1) + ' lb/bu test wt' : 'no test wt'}${x.vsCheck != null ? ` · ${sgn(x.vsCheck)} vs nearest checks` : ''}`; },
         refLine: R.checkAvg != null ? { v: R.checkAvg, label: 'Check avg' } : null },
@@ -2180,14 +2350,14 @@ function viewTrials() {
   const sc = R.E.filter(x => x.yld != null && x.moisture != null && x.type !== 'buffer');
   const cScatter = chartCard({ key: 'trial-scatter', title: 'Yield vs harvest moisture', sub: 'Upper left is best: high yield, dry grain', height: 300,
     legend: legendItem('var(--act)', 'Entry') + legendItem('var(--exp)', 'Check strip'),
-    empty: sc.length ? null : 'No strips weighed yet.', aria: 'Scatter plot of dry yield against harvest moisture for each strip',
-    table: { head: [{ t: 'Entry' }, { t: 'Moisture', num: 1 }, { t: 'Dry yield', num: 1 }, { t: 'Test wt', num: 1 }], rows: sc.slice().sort((a, b) => a.moisture - b.moisture).map(x => [esc(x.name), nf(x.moisture, 1) + '%', nf(x.yld, 1) + ' bu/ac', x.testWeight != null ? nf(x.testWeight, 1) + ' lb/bu' : '—']) },
+    empty: sc.length ? null : 'No strips weighed yet.', aria: 'Scatter plot of yield against harvest moisture for each strip',
+    table: { head: [{ t: 'Entry' }, { t: 'Moisture', num: 1 }, { t: 'Yield', num: 1 }, { t: 'Test wt', num: 1 }], rows: sc.slice().sort((a, b) => a.moisture - b.moisture).map(x => [esc(x.name), nf(x.moisture, 1) + '%', nf(x.yld, 1) + ' bu/ac', x.testWeight != null ? nf(x.testWeight, 1) + ' lb/bu' : '—']) },
     build: () => buildTrialScatter(sc) });
   const D = R.dealers.slice();
   const chkRow = R.checkAvg != null ? { dealer: `Check (${R.checks[0] ? R.checks[0].hybrid : ''})`, yld: R.checkAvg, items: R.checks, moist: R.checks.length ? sum(R.checks, c => c.moisture) / R.checks.length : null, isCheck: true } : null;
   const DD = chkRow ? D.concat([chkRow]).sort((a, b) => b.yld - a.yld) : D;
   const cDealer = chartCard({ key: 'trial-dealer', title: 'Average yield by dealer', sub: 'Mean of each dealer\'s weighed entries · bu/ac', height: Math.max(220, DD.length * 30 + 40),
-    empty: D.length ? null : 'No weighed entries yet.', aria: `Bar chart of average dry yield by dealer: ${DD.map(d => `${d.dealer} ${nf(d.yld, 1)}`).join(', ')}`,
+    empty: D.length ? null : 'No weighed entries yet.', aria: `Bar chart of average yield by dealer: ${DD.map(d => `${d.dealer} ${nf(d.yld, 1)}`).join(', ')}`,
     table: { head: [{ t: 'Dealer' }, { t: 'Entries', num: 1 }, { t: 'Avg yield', num: 1 }, { t: 'Avg moisture', num: 1 }, { t: 'Best entry' }],
       rows: DD.map(d => [esc(d.dealer), d.items.length, nf(d.yld, 1) + ' bu/ac', d.moist != null ? nf(d.moist, 1) + '%' : '—', d.isCheck ? '—' : `${esc(d.best.name)} (${nf(d.best.yld, 1)})`]),
       bar: { vals: DD.map(d => d.yld), color: i => DD[i].isCheck ? 'var(--exp)' : 'var(--cost)', label: 'Avg yield' } },
@@ -2199,9 +2369,9 @@ function viewTrials() {
   // Strip table
   const sort = UI.trialSort === 'rank' ? 'rank' : 'order';
   const rows = sort === 'rank' ? R.E.slice().sort((a, b) => (b.yld ?? -1) - (a.yld ?? -1) || a.order - b.order) : R.E;
-  html += `<section class="card"><div class="card-head"><div><h3>Strip results</h3><p class="sub">Dry yield = harvest wt × (100 − moisture) ÷ (100 − ${nf(R.std, 1)}) ÷ ${R.lbBu} lb/bu ÷ strip acres. "vs checks" compares each entry with the average of the nearest weighed check strip on each side.</p></div>
+  html += `<section class="card"><div class="card-head"><div><h3>Strip results</h3><p class="sub">Yield (bu/ac) = ${esc(fxPretty(R.formula))}. "vs checks" compares each entry with the average of the nearest weighed check strip on each side.</p></div>
     <div class="seg" role="group" aria-label="Sort strips"><button type="button" data-act="trial-sort" data-id="order" aria-pressed="${sort === 'order'}">Field order</button><button type="button" data-act="trial-sort" data-id="rank" aria-pressed="${sort === 'rank'}">Highest yield</button></div></div>
-    <div class="table-wrap"><table class="rtable dense"><thead><tr><th class="num">Strip</th><th>Entry</th><th>Dealer</th><th class="num">Moisture</th><th class="num">Test wt</th><th class="num">Harvest wt</th><th class="num">Dry yield</th><th class="num">vs checks</th><th class="num">Rank</th><th class="num">Gross $/ac</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>
+    <div class="table-wrap"><table class="rtable dense"><thead><tr><th class="num">Strip</th><th>Entry</th><th>Dealer</th><th class="num">Moisture</th><th class="num">Test wt</th><th class="num">Harvest wt</th><th class="num">Yield</th><th class="num">vs checks</th><th class="num">Rank</th><th class="num">Gross $/ac</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>
     ${rows.map(x => { const blank = x.yld == null, partial = blank && (x.moisture != null || x.testWeight != null); return `<tr class="${blank && !partial ? 'blank-row' : ''}${x.type !== 'entry' ? ' check-row' : ''}">
       <td class="num" data-label="Strip">${x.order}</td>
       <td class="rt-title" data-label="Entry">${esc(x.name)}${x.type === 'check' ? ' <span class="chip">Check</span>' : x.type === 'buffer' ? ' <span class="chip">Buffer</span>' : ''}</td>
@@ -2209,7 +2379,7 @@ function viewTrials() {
       <td class="num" data-label="Moisture">${x.moisture != null ? nf(x.moisture, 1) + '%' : '—'}</td>
       <td class="num" data-label="Test wt">${x.testWeight != null ? nf(x.testWeight, 1) + ' lb/bu' : '—'}</td>
       <td class="num" data-label="Harvest wt">${x.weight != null ? nf(x.weight) + ' lb' : '—'}</td>
-      <td class="num keep" data-label="Dry yield">${blank ? `<span class="muted">${x.type === 'buffer' ? 'Buffer' : partial ? 'No harvest weight' : 'Not weighed'}</span>` : `<b>${nf(x.yld, 1)}</b> bu/ac`}</td>
+      <td class="num keep" data-label="Yield">${blank ? `<span class="muted">${x.type === 'buffer' ? 'Buffer' : partial ? 'No harvest weight' : 'Not weighed'}</span>` : `<b>${nf(x.yld, 1)}</b> bu/ac`}</td>
       <td class="num" data-label="vs checks">${x.vsCheck != null ? `<span class="${x.vsCheck >= 0 ? 'pos' : 'neg'}">${sgn(x.vsCheck)}</span>` : '—'}</td>
       <td class="num" data-label="Rank">${x.rank ? `${x.rank} of ${R.scored.length}` : '—'}</td>
       <td class="num" data-label="Gross $/ac">${x.rev != null ? money(x.rev) : '—'}</td>
@@ -2224,12 +2394,12 @@ function buildTrialScatter(sc) {
   const mk = (arr, col, label) => ({ label, data: arr.map(x => ({ x: x.moisture, y: r2(x.yld), e: x })), backgroundColor: col, borderColor: t.surface, borderWidth: 2, pointRadius: 6, pointHoverRadius: 7, pointHitRadius: 10 });
   const top = ent.slice().sort((a, b) => b.yld - a.yld).slice(0, 3).map(x => ent.indexOf(x));
   return { custom: true, meta: { pointLabels: top,
-      tip: tooltip => { const dp = tooltip.dataPoints[0], e = dp.raw.e; return { title: e.name + (e.type === 'entry' && e.dealer ? ' · ' + e.dealer : ''), rows: [{ color: dp.dataset.backgroundColor, value: `${nf(e.yld, 1)} bu/ac`, label: 'dry yield' }, { color: dp.dataset.backgroundColor, value: `${nf(e.moisture, 1)}%`, label: 'moisture' }], note: `${e.testWeight != null ? nf(e.testWeight, 1) + ' lb/bu test wt' : ''}${e.rank ? ` · rank ${e.rank}` : ''}` }; } },
+      tip: tooltip => { const dp = tooltip.dataPoints[0], e = dp.raw.e; return { title: e.name + (e.type === 'entry' && e.dealer ? ' · ' + e.dealer : ''), rows: [{ color: dp.dataset.backgroundColor, value: `${nf(e.yld, 1)} bu/ac`, label: 'yield' }, { color: dp.dataset.backgroundColor, value: `${nf(e.moisture, 1)}%`, label: 'moisture' }], note: `${e.testWeight != null ? nf(e.testWeight, 1) + ' lb/bu test wt' : ''}${e.rank ? ` · rank ${e.rank}` : ''}` }; } },
     config: { type: 'scatter', data: { datasets: [mk(ent, css('--act'), 'Entry'), mk(chk, css('--exp'), 'Check strip')] },
       options: { responsive: true, maintainAspectRatio: false, animation: reduceMotion() ? false : { duration: 350 }, layout: { padding: { top: 12, right: 16 } },
         interaction: { mode: 'nearest', intersect: false, axis: 'xy' }, plugins: { legend: { display: false }, tooltip: { enabled: false, external: externalTooltip } },
         scales: { x: { grace: '5%', grid: { color: t.grid, drawTicks: false }, border: { color: t.base }, ticks: { color: t.muted, padding: 6, callback: v => v + '%' }, title: { display: true, text: 'Harvest moisture (%)', color: t.muted, font: { size: 12 } } },
-          y: { grace: '5%', grid: { color: t.grid, drawTicks: false }, border: { display: false }, ticks: { color: t.muted, padding: 8, maxTicksLimit: 6 }, title: { display: true, text: 'Dry yield (bu/ac)', color: t.muted, font: { size: 12 } } } } } } };
+          y: { grace: '5%', grid: { color: t.grid, drawTicks: false }, border: { display: false }, ticks: { color: t.muted, padding: 8, maxTicksLimit: 6 }, title: { display: true, text: 'Yield (bu/ac)', color: t.muted, font: { size: 12 } } } } } } };
 }
 const pointLabelPlugin = { id: 'ffPointLabels', afterDatasetsDraw(chart) {
   const m = chartMeta.get(chart.canvas); if (!m || !m.pointLabels) return;
@@ -2275,7 +2445,6 @@ function openTrialModal(id, preset = {}) {
       <div class="fld"><label for="tLen">Strip length</label>${unitField('tLen', d.stripLength, 'ft')}</div>
       <div class="fld"><label for="tRows">Rows harvested per strip</label>${unitField('tRows', d.rows, 'rows')}</div>
       <div class="fld"><label for="tSpace">Row spacing</label>${unitField('tSpace', d.rowSpacing, 'in')}</div>
-      <div class="fld"><label for="tStd">Standard moisture</label>${unitField('tStd', d.stdMoisture, '%')}<span class="hint">Wet weights are adjusted to this moisture.</span></div>
       <div class="fld"><label for="tPrice">Price</label>${unitField('tPrice', d.price, '$/bu')}<span class="hint">Blank uses the crop's default price.</span></div>
       <div class="fld span-2"><label for="tNotes">Notes</label><input id="tNotes" type="text" value="${esc(d.notes)}" autocomplete="off"></div>
       <div class="calc" id="tCalc" aria-live="polite"></div>
@@ -2286,10 +2455,9 @@ function openTrialModal(id, preset = {}) {
     },
     onSubmit: () => {
       const name = val('tName'); if (!name) return 'Enter a trial name.';
-      const len = num(val('tLen')), rows = num(val('tRows')), sp = num(val('tSpace')), std = num(val('tStd'));
+      const len = num(val('tLen')), rows = num(val('tRows')), sp = num(val('tSpace'));
       if (len != null && len <= 0) return 'Strip length must be more than 0.';
-      if (std != null && (std < 0 || std >= 40)) return 'Standard moisture should be between 0 and 40%.';
-      const data = { name, year: +val('tYear'), cropId: val('tCrop'), fieldId: val('tField') || null, location: val('tLoc'), stripLength: len, rows, rowSpacing: sp, stdMoisture: std, price: num(val('tPrice')), notes: val('tNotes') };
+      const data = { name, year: +val('tYear'), cropId: val('tCrop'), fieldId: val('tField') || null, location: val('tLoc'), stripLength: len, rows, rowSpacing: sp, stdMoisture: t ? t.stdMoisture : 15, price: num(val('tPrice')), notes: val('tNotes') };
       if (t) Object.assign(t, data); else { const nt = Object.assign({ id: uid('t'), entries: [] }, data); S.trials.push(nt); UI.trialId = nt.id; }
       UI.year = data.year; commit(); toast(t ? 'Trial saved' : `Added ${name}`);
       if (!t && UI.tab !== 'trials') location.hash = '#trials';
@@ -2319,7 +2487,7 @@ function openEntryModal(key, newForTrial) {
       const upd = () => {
         const tmp = Object.assign({}, t, { entries: [{ id: 'x', order: 1, type: 'entry', moisture: num(val('eMoist')), weight: num(val('eWt')), length: num(val('eLen')), testWeight: null }] });
         const x = trialCalc(tmp).E[0];
-        $('#eCalc').textContent = x.yld != null ? `${nf(x.dryBu, 1)} dry bu from ${nf(x.acres, 3)} ac = ${nf(x.yld, 1)} bu/ac at ${nf(num(t.stdMoisture) ?? 15, 1)}% moisture` : 'Enter moisture and harvest weight to calculate dry yield.';
+        $('#eCalc').textContent = x.yld != null ? `${nf(x.yld, 1)} bu/ac by the ${cropById(t.cropId).name.toLowerCase()} formula (${x.acres ? nf(x.acres, 3) + ' ac strip' : 'strip size not set'})` : 'Enter the harvest weight and moisture to calculate the yield.';
       };
       ['eMoist', 'eWt', 'eLen'].forEach(x => $('#' + x).addEventListener('input', upd)); upd();
     },
@@ -2341,7 +2509,6 @@ function openTrialImportModal(preset = {}) {
       <div class="fld span-2"><label for="kPaste">Or paste the cells</label><textarea id="kPaste" rows="4" placeholder="Paste from Google Sheets or Excel"></textarea></div>
       <div class="fld"><label for="kYear">Season</label>${yearSelect('kYear', UI.year)}</div>
       <div class="fld"><label for="kField">Field</label><select id="kField"><option value="">Not linked to a field</option>${S.fields.map(f => `<option value="${esc(f.id)}"${f.id === preField ? ' selected' : ''}>${esc(f.name)}</option>`).join('')}</select></div>
-      <div class="fld"><label for="kStd">Standard moisture</label>${unitField('kStd', 15, '%')}</div>
       <div class="fld"><label for="kRows">Rows harvested per strip</label>${unitField('kRows', 8, 'rows')}</div>
       <div class="fld"><label for="kSpace">Row spacing</label>${unitField('kSpace', 30, 'in')}</div>
       <div class="calc" id="kPrev" aria-live="polite">Choose a file or paste the cells to see what will be imported.</div>
@@ -2356,7 +2523,7 @@ function openTrialImportModal(preset = {}) {
     },
     onSubmit: () => {
       if (!parsed) return 'Choose a CSV file or paste the cells first.';
-      const opts = { year: +val('kYear'), fieldId: val('kField') || null, rows: num(val('kRows')), rowSpacing: num(val('kSpace')), stdMoisture: num(val('kStd')) ?? 15 };
+      const opts = { year: +val('kYear'), fieldId: val('kField') || null, rows: num(val('kRows')), rowSpacing: num(val('kSpace')), stdMoisture: 15 };
       const made = parsed.trials.map(x => makeTrial(x, opts));
       S.trials.push(...made); UI.trialId = made[0].id; UI.year = opts.year;
       commit(); toast(`Imported ${made.length} trial${made.length > 1 ? 's' : ''}`);
@@ -2370,7 +2537,19 @@ const MARKET_MAP = { corn: 'corn', soybeans: 'soybeans', 'wheat-winter': 'wheat'
 let MARKET = null, MARKET_STATE = /^https?:/.test(location.protocol) ? 'loading' : 'off';
 const roundPrice = (v, unit) => unit === 'lb/ac' ? Math.round(v * 1000) / 1000 : Math.round(v * 100) / 100;
 const marketQuote = c => { const k = c && MARKET_MAP[c.id]; return k && MARKET && MARKET.quotes ? MARKET.quotes[k] || null : null; };
-function softRender() { if (!$('#modalRoot').classList.contains('open')) render(); }
+const typingInView = () => { const a = document.activeElement; return !!(a && a.closest && a.closest('#view') && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)); };
+let renderPending = false;
+// Redraw for background updates (prices, forecast), but never under an open dialog or while someone is typing.
+function softRender() {
+  if ($('#modalRoot').classList.contains('open')) return;
+  if (typingInView()) { renderPending = true; return; }
+  renderPending = false; render();
+}
+document.addEventListener('focusout', () => setTimeout(() => {
+  if (typingInView() || $('#modalRoot').classList.contains('open')) return;
+  if (SYNC.deferred) { SYNC.deferred = false; syncPoll(); }
+  else if (renderPending) { renderPending = false; render(); }
+}, 150));
 function applyMarket() {
   let changed = false;
   for (const c of S.crops) {
@@ -2388,10 +2567,12 @@ async function loadMarket() {
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
     if (!d || !d.quotes) throw new Error('no quotes');
+    const before = MARKET_STATE === 'on' && MARKET ? MARKET.asOf : null;
     MARKET = d; MARKET_STATE = 'on';
-    if (applyMarket()) save();
-  } catch (e) { MARKET_STATE = 'stale'; }
-  softRender();
+    const changed = applyMarket();
+    if (changed) save();
+    if (changed || before !== d.asOf) softRender();
+  } catch (e) { const was = MARKET_STATE; MARKET_STATE = 'stale'; if (was !== 'stale') softRender(); }
 }
 function marketNote() {
   if (MARKET_STATE === 'off') return '<p class="auto-note">Sell prices update automatically from the futures market on the live site. Here they are set by hand.</p>';
@@ -2496,13 +2677,13 @@ function wxDayName(d, i) {
 function forecastCard() {
   if (WX_STATE === 'off' && !WX) return '';
   const head = (inner) => `<section class="card wx" aria-label="Weather forecast">${inner}</section>`;
-  if (!WX) return head(`<div class="wx-head"><div><h3>Rain or shine: 7-day forecast</h3><p class="wx-sub">${WX_STATE === 'loading' ? 'Loading the National Weather Service forecast…' : 'The forecast couldn\'t load. Check the internet connection and tap Refresh.'}</p></div>${WX_STATE === 'loading' ? '' : '<button type="button" class="btn sm" data-act="wx-refresh">Refresh</button>'}</div>`);
+  if (!WX) return head(`<div class="wx-head"><div><h3>7-day forecast</h3><p class="wx-sub">${WX_STATE === 'loading' ? 'Loading the National Weather Service forecast…' : 'The forecast couldn\'t load. Check the internet connection and tap Refresh.'}</p></div>${WX_STATE === 'loading' ? '' : '<button type="button" class="btn sm" data-act="wx-refresh">Refresh</button>'}</div>`);
   const days = WX.days, names = arr => arr.map(d => wxDayName(d, days.indexOf(d))).join(', ');
   const wet = days.filter(d => d.pop >= 50), maybe = days.filter(d => d.pop >= 30 && d.pop < 50);
   const good = days.filter(d => !d.tonight && d.pop < 20 && ['sun', 'partly', 'cloud'].includes(wxKind(d.text)));
   const headline = wet.length ? `Rain likely ${names(wet)}` : maybe.length ? `Mostly dry. Some chance of rain ${names(maybe)}` : 'Dry for the next 7 days';
   const updated = new Date(WX.updated);
-  return head(`<div class="wx-head"><div><h3>Rain or shine: 7-day forecast</h3><p class="wx-headline">${esc(headline)}</p>${good.length ? `<p class="wx-sub">Driest days for field work: ${esc(names(good.slice(0, 3)))}</p>` : ''}</div>
+  return head(`<div class="wx-head"><div><h3>7-day forecast</h3><p class="wx-headline">${esc(headline)}</p>${good.length ? `<p class="wx-sub">Driest days for field work: ${esc(names(good.slice(0, 3)))}</p>` : ''}</div>
       <button type="button" class="btn sm" data-act="wx-refresh">Refresh</button></div>
     <div class="wx-days">${days.map((d, i) => { const nm = wxDayName(d, i), lab = wxLabel(d);
       return `<div class="wx-day${d.pop >= 50 ? ' wet' : ''}" role="group" aria-label="${esc(`${nm}: ${d.text}. ${d.hi != null ? `High ${d.hi}°F. ` : ''}${d.lo != null ? `Low ${d.lo}°F. ` : ''}${d.pop}% chance of precipitation.`)}" title="${esc(d.detail || d.text)}">
@@ -2521,7 +2702,7 @@ const SYNC_COLLS = ['crops', 'fields', 'plantings', 'inputs', 'observations', 'r
 const EDIT_ACTS = new Set(['add-field', 'edit-field', 'del-field', 'edit-planting', 'del-planting', 'harvest', 'clear-harvest', 'add-crop', 'edit-crop', 'del-crop',
   'add-input', 'edit-input', 'del-input', 'add-obs', 'edit-obs', 'del-obs', 'edit-rain', 'del-rain', 'import-trial', 'add-trial', 'edit-trial', 'del-trial',
   'add-entry', 'edit-entry', 'del-entry', 'field-add-trial', 'field-trial-import', 'field-trial-new', 'field-trial-link', 'start-empty', 'reset-sample',
-  'save-farm', 'import-paste', 'save-wx-loc', 'sync-init']);
+  'save-farm', 'import-paste', 'save-wx-loc', 'sync-init', 'edit-formula']);
 const IN_DATA_MODAL = new Set(['save-farm', 'import-paste', 'save-wx-loc', 'sync-init', 'start-empty', 'reset-sample']);
 const plain = o => JSON.parse(JSON.stringify(o));
 const needsPasscode = () => SYNC.configured && !SYNC.canEdit && !['off', 'connecting'].includes(SYNC.mode);
@@ -2604,13 +2785,13 @@ async function syncPush(attempt) {
 }
 async function syncPoll() {
   if (SYNC.mode === 'off' || SYNC.mode === 'connecting' || SYNC.pushing || document.hidden) return;
-  if ($('#modalRoot').classList.contains('open')) { SYNC.deferred = true; return; }
+  if ($('#modalRoot').classList.contains('open') || typingInView()) { SYNC.deferred = true; return; }
   try {
     const r = await syncApi('/api/state?known=' + SYNC.version);
     if (!r.ok || !r.body) throw new Error('poll failed');
     SYNC.configured = !!r.body.configured;
     if (SYNC.mode === 'offline' || SYNC.mode === 'unconfigured') SYNC.mode = !SYNC.configured ? 'unconfigured' : SYNC.canEdit ? 'on' : 'readonly';
-    if ($('#modalRoot').classList.contains('open')) { SYNC.deferred = true; return; }
+    if ($('#modalRoot').classList.contains('open') || typingInView()) { SYNC.deferred = true; return; }
     if (applyRemote(r.body)) { render(); toast('Updated with changes from another device'); }
     if (SYNC.dirty && SYNC.canEdit) schedulePush(0);
   } catch (e) { if (SYNC.mode !== 'off') SYNC.mode = 'offline'; }
@@ -2663,7 +2844,7 @@ async function unlockWith(pc, after) {
       Object.assign(SYNC, { passcode: pc, canEdit: true, mode: SYNC.mode === 'offline' ? 'offline' : 'on', error: '' }); syncStore();
       closeModal(); toast('Editing unlocked on this device'); renderSyncChip();
       if (after) setTimeout(after, 60);
-    } else if (err) err.textContent = r.status === 401 ? 'That passcode isn\'t right.' : r.status === 429 ? 'Too many wrong passcodes. Try again in 15 minutes.' : r.status === 503 ? 'Shared saving isn\'t turned on yet.' : 'Couldn\'t check the passcode. Try again.';
+    } else if (err) err.textContent = r.status === 401 ? 'That passcode isn\'t right.' : r.status === 429 ? 'Too many wrong passcodes from this internet connection. Try again in 15 minutes.' : r.status === 503 ? 'Shared saving isn\'t turned on yet.' : 'Couldn\'t check the passcode. Try again.';
   } catch (e) { if (err) err.textContent = 'No connection. Try again when this device is online.'; }
 }
 function syncSectionHtml() {
@@ -2742,6 +2923,7 @@ const ACTIONS = {
   'compare-metric': id => { UI.compareMetric = id; render(); },
   'more-inputs': () => { UI.showAllInputs = true; render(); },
   'more-rain': () => { UI.showAllRain = true; render(); },
+  'edit-formula': id => openFormulaModal(id),
   'sync-unlock': () => openUnlockModal(),
   'sync-setup': async () => {
     const a = val('spNew'), b2 = val('spNew2'), msg = $('#spMsg');
