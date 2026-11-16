@@ -508,6 +508,23 @@ tr.blank-row td { color: var(--muted); }
 .pct-bar { width: 60px; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; display: inline-block; }
 .pct-bar i { display: block; height: 100%; background: var(--green); border-radius: 4px; }
 
+/* Sell price editor */
+.sp-edit { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.sp-input { width: 150px; }
+.sp-input input { min-height: 40px; padding: 6px 54px 6px 10px; text-align: right; font-variant-numeric: tabular-nums; }
+.sp-mode button { min-height: 40px; }
+.sp-cell .price-src { text-align: right; }
+.sp-list { display: flex; flex-direction: column; }
+.sp-row { display: grid; grid-template-columns: minmax(120px, 1fr) auto; gap: 4px 16px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); }
+.sp-row:first-child { border-top: 0; padding-top: 0; }
+.sp-row .price-src { grid-column: 2; text-align: right; }
+@media (max-width: 720px) {
+  .sp-row { grid-template-columns: minmax(0, 1fr); }
+  .sp-row .price-src { grid-column: 1; text-align: left; }
+  .sp-edit { justify-content: flex-start; }
+  .rtable td.sp-cell { flex-wrap: wrap; }
+}
+
 /* ---- School Farm look: emblem blue + corn gold, record-book styling ---- */
 :root {
   --blue: #1b4f8f; --blue-deep: #12355f; --gold: #f2b705; --gold-ink: #5a4300;
@@ -1344,7 +1361,7 @@ function viewFields() {
     <button type="button" class="btn" data-act="add-crop">+ Add custom crop</button></div>
     ${marketNote()}<div class="table-wrap"><table class="rtable"><thead><tr><th>Crop</th><th>Unit</th><th class="num">Sell price</th><th class="num">Expected yield</th><th class="num">Days to harvest</th><th>Growth stages</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>
     ${S.crops.map(c => `<tr><td class="rt-title" data-label="Crop"><span class="crop-name"><i class="dot" style="--c:${cropVar(c)}"></i>${esc(c.name)}</span>${c.builtin ? '' : ' <span class="chip">Custom</span>'}</td>
-      <td data-label="Unit">${esc(c.unit)}</td><td class="num" data-label="Sell price">${fmtPrice(c.price, c.unit)}${priceSource(c)}</td><td class="num" data-label="Expected yield">${fmtYield(c.expectedYield)} ${esc(c.unit)}</td>
+      <td data-label="Unit">${esc(c.unit)}</td><td class="sp-cell" data-label="Sell price">${sellPriceEditor(c, 'crops')}</td><td class="num" data-label="Expected yield">${fmtYield(c.expectedYield)} ${esc(c.unit)}</td>
       <td class="num" data-label="Days to harvest">${nf(c.seasonDays)} days</td><td data-label="Growth stages"><span class="small muted">${esc(c.stages.map(s => s.code).join(' · ') || '—')}</span></td>
       <td class="actions">${LB_PER_BU[c.id] ? `<button type="button" class="btn btn-ghost sm" data-act="edit-formula" data-id="${esc(c.id)}">Yield formula</button>` : ''}<button type="button" class="icon-btn" data-act="edit-crop" data-id="${esc(c.id)}" aria-label="Edit ${esc(c.name)}">${ICON.edit}</button>${c.builtin ? '' : `<button type="button" class="icon-btn danger" data-act="del-crop" data-id="${esc(c.id)}" aria-label="Delete ${esc(c.name)}">${ICON.del}</button>`}</td></tr>`).join('')}
     </tbody></table></div></section>`;
@@ -1640,6 +1657,9 @@ function viewYield() {
   const F = filt(), E = F.plantings.map(econ);
   const acres = sum(E, e => e.acres), rev = sum(E, e => e.revenue), cost = sum(E, e => e.cost), net = rev - cost, nH = E.filter(e => e.harvested).length;
   const pctCell = e => e.pct != null ? `<span class="${e.pct >= 1 ? 'pos' : 'neg'}">${e.pct >= 1 ? '+' : '−'}${Math.abs(Math.round((e.pct - 1) * 100))}%</span>` : '—';
+  const cropsHere = [...new Set(E.map(e => e.crop.id))].map(cropById);
+  const spCard = cropsHere.length ? `<section class="card"><div class="card-head"><div><h3>Sell prices</h3><p class="sub">Type a price to set it yourself, or choose Market to follow futures + your basis. A sale price typed when recording a harvest, or sales on the Sales tab, take priority for those bushels.</p></div></div>
+    <div class="sp-list">${cropsHere.map(c => `<div class="sp-row"><span class="crop-name"><i class="dot" style="--c:${cropVar(c)}"></i>${esc(c.name)}</span>${sellPriceEditor(c, 'yield')}</div>`).join('')}</div></section>` : '';
   return `<div class="toolbar"><div><h2>Yield &amp; profit</h2><p>${nH} of ${E.length} fields harvested · ${nf(acres)} ac · ${F.y} season</p></div></div>
   <section class="tiles" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
     <div class="tile"><div class="tile-label">Gross revenue</div><div class="tile-value">${moneyC(rev)}</div><div class="tile-sub">${money(acres ? rev / acres : 0)}/ac</div></div>
@@ -1647,6 +1667,7 @@ function viewYield() {
     <div class="tile"><div class="tile-label">Net profit</div><div class="tile-value ${net >= 0 ? 'pos' : 'neg'}">${net >= 0 ? '▲ ' : '▼ '}${moneyC(net)}</div><div class="tile-sub">${signedMoney(acres ? net / acres : 0)}/ac</div></div>
     <div class="tile"><div class="tile-label">Fields at a loss</div><div class="tile-value">${E.filter(e => e.net < 0).length}</div><div class="tile-sub">of ${E.length} fields this season</div></div>
   </section>
+  ${spCard}
   <section class="card"><div class="card-head"><div><h3>Field economics</h3><p class="sub">Unharvested fields use expected yield and are marked Projected</p></div></div>
     ${E.length ? `<div class="table-wrap"><table class="rtable dense"><thead><tr><th>Field</th><th>Crop</th><th class="num">Acres</th><th class="num">Expected</th><th class="num">Actual</th><th class="num">vs exp.</th><th class="num">Price</th><th class="num">Gross revenue</th><th class="num">Total cost</th><th class="num">Cost/ac</th><th class="num">Net profit</th><th class="num">Profit/ac</th><th class="num">Break-even price</th><th class="num">Break-even yield</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>
     ${E.map(e => `<tr><td class="rt-title" data-label="Field">${esc(e.field.name)}${e.harvested ? '' : '<span class="proj">Projected</span>'}</td>
@@ -2729,11 +2750,29 @@ function marketNote() {
   if (MARKET_STATE === 'stale') return '<p class="auto-note">Today\'s market prices couldn\'t be loaded, so the last saved prices are used.</p>';
   const auto = S.crops.filter(c => marketQuote(c) && c.autoPrice !== false);
   const noBasis = auto.filter(c => !num(c.basis)).map(c => c.name);
-  return `<p class="auto-note">Sell prices follow the futures market and update each weekday after the close (last update ${fmtDate(String(MARKET.asOf).slice(0, 10), true)}). Sell price = futures + your elevator's basis.${noBasis.length ? ` No basis is set yet for ${esc(noBasis.join(', '))}, so those prices equal futures. Tap the edit button on a crop to add its basis.` : ''}</p>`;
+  return `<p class="auto-note">Sell prices follow the futures market and update each weekday after the close (last update ${fmtDate(String(MARKET.asOf).slice(0, 10), true)}). Sell price = futures + your elevator's basis.${noBasis.length ? ` No basis is set yet for ${esc(noBasis.join(', '))}, so those prices equal futures. Tap the edit button on a crop to add its basis, or choose Manual and type your own price.` : ''}</p>`;
+}
+// A crop's sell price: a box to type it (which switches the crop to Manual) and a Market / Manual switch.
+function sellPriceEditor(c, where) {
+  const mk = !!MARKET_MAP[c.id], auto = mk && c.autoPrice !== false, u = unitPer(c.unit);
+  const id = `sp_${where}_${String(c.id).replace(/[^A-Za-z0-9_-]/g, '')}`;
+  return `<div class="sp-edit">${mk ? `<div class="seg sp-mode" role="group" aria-label="How the ${esc(c.name)} sell price is set"><button type="button" data-act="sp-mode" data-id="${esc(c.id)}|auto" aria-pressed="${auto}">Market</button><button type="button" data-act="sp-mode" data-id="${esc(c.id)}|manual" aria-pressed="${!auto}">Manual</button></div>` : ''}
+    <div class="input-unit sp-input"><input type="number" inputmode="decimal" step="${c.unit === 'lb/ac' ? '0.001' : '0.01'}" min="0" id="${id}" data-sp="${esc(c.id)}" value="${esc(c.price)}" aria-label="${esc(c.name)} sell price"><span>$/${u}</span></div></div>${priceSource(c)}`;
+}
+function setSellPrice(input) {
+  const c = S.crops.find(x => x.id === input.dataset.sp); if (!c) return;
+  if (needsPasscode()) { input.value = c.price; openUnlockModal(); return; }
+  const v = num(input.value);
+  if (v == null || v < 0) { input.value = c.price; toast('Enter a price of 0 or more'); return; }
+  const wasMarket = !!MARKET_MAP[c.id] && c.autoPrice !== false;
+  c.price = roundPrice(v, c.unit); c.autoPrice = false;
+  commit();
+  toast(`${c.name} sell price set to ${fmtPrice(c.price, c.unit)}${wasMarket ? '. It won\'t follow futures until you tap Market.' : ''}`);
 }
 function priceSource(c) {
   const q = marketQuote(c);
-  if (!MARKET_MAP[c.id] || c.autoPrice === false) return '<div class="price-src">Set by hand</div>';
+  if (MARKET_MAP[c.id] && c.autoPrice === false) return `<div class="price-src">Set by hand${q ? ` · ${esc(q.label)} futures today ${fmtPrice(q.price, c.unit)}` : ''}</div>`;
+  if (!MARKET_MAP[c.id]) return '<div class="price-src">Set by hand (no futures market)</div>';
   if (!q) return '<div class="price-src">Follows futures</div>';
   const b = num(c.basis) || 0;
   return `<div class="price-src">${esc(q.label)} futures ${fmtPrice(q.price, c.unit)}${b ? ` ${b < 0 ? '−' : '+'} ${money(Math.abs(b), c.unit === 'lb/ac' ? 3 : 2)} basis` : ', no basis'}</div>`;
@@ -2851,7 +2890,7 @@ const SYNC_COLLS = ['crops', 'fields', 'plantings', 'inputs', 'observations', 'r
 const EDIT_ACTS = new Set(['add-field', 'edit-field', 'del-field', 'edit-planting', 'del-planting', 'harvest', 'clear-harvest', 'add-crop', 'edit-crop', 'del-crop',
   'add-input', 'edit-input', 'del-input', 'add-sale', 'edit-sale', 'del-sale', 'edit-rain', 'del-rain', 'import-trial', 'add-trial', 'edit-trial', 'del-trial',
   'add-entry', 'edit-entry', 'del-entry', 'field-add-trial', 'field-trial-import', 'field-trial-new', 'field-trial-link', 'start-empty', 'reset-sample',
-  'save-farm', 'import-paste', 'save-wx-loc', 'sync-init', 'edit-formula']);
+  'save-farm', 'import-paste', 'save-wx-loc', 'sync-init', 'edit-formula', 'sp-mode']);
 const IN_DATA_MODAL = new Set(['save-farm', 'import-paste', 'save-wx-loc', 'sync-init', 'start-empty', 'reset-sample']);
 const plain = o => JSON.parse(JSON.stringify(o));
 const needsPasscode = () => SYNC.configured && !SYNC.canEdit && !['off', 'connecting'].includes(SYNC.mode);
@@ -3073,6 +3112,15 @@ const ACTIONS = {
   'more-inputs': () => { UI.showAllInputs = true; render(); },
   'more-rain': () => { UI.showAllRain = true; render(); },
   'edit-formula': id => openFormulaModal(id),
+  'sp-mode': id => {
+    const [cid, mode] = String(id).split('|'), c = S.crops.find(x => x.id === cid); if (!c) return;
+    const auto = mode === 'auto';
+    if ((c.autoPrice !== false) === auto) return;
+    c.autoPrice = auto; if (auto) applyMarket();
+    commit();
+    toast(auto ? (MARKET_STATE === 'on' ? `${c.name} follows the futures market again: ${fmtPrice(c.price, c.unit)}` : `${c.name} will follow futures when today's market prices load`)
+      : `${c.name} is set by hand at ${fmtPrice(c.price, c.unit)}. Type a new price to change it.`);
+  },
   'sync-unlock': () => openUnlockModal(),
   'sync-setup': async () => {
     const a = val('spNew'), b2 = val('spNew2'), msg = $('#spMsg');
@@ -3149,6 +3197,7 @@ document.addEventListener('change', e => {
   else if (id === 'inCat') { UI.inputCat = e.target.value; UI.showAllInputs = false; render(); }
   else if (id === 'obsIssue') { UI.obsIssue = e.target.value; render(); }
   else if (id === 'trialSel') { UI.trialId = e.target.value; render(); }
+  else if (e.target.dataset && e.target.dataset.sp) setSellPrice(e.target);
 });
 document.addEventListener('submit', e => {
   if (e.target.id !== 'rainQuick') return;
