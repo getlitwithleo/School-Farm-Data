@@ -38,8 +38,8 @@ The Sales tab records each sale or contract: date, crop and season, field (optio
 - Marketing by crop compares what was raised (harvested, or expected before harvest) with what's sold or contracted, and values the unsold grain at today's sell price.
 - Yield & Profit uses what you were paid for the sold bushels and today's sell price for the rest. A sale price typed on a field's harvest still takes priority.
 - Contracts not yet delivered show under Needs attention on the dashboard when they're due within two weeks.
-- **Your prices** charts only the farm's own prices for a crop: the prices you add, connected as a line, and your sales as dots, over the last 1, 3, 6 or 12 months or all time. Above it: your latest price, the change since your last price and over the range, and your high and low.
+- **Your prices** charts only the farm's own prices for a crop: the average prices per bushel you add, connected as a line, and your sales as dots, over the last 1, 3, 6 or 12 months or all time. A dashed line and the first box above the chart show the average of those prices. Also shown: your latest price, the change since your last price and over the range, and your high and low.
 - **Minimize** shrinks the Your prices card to one line with your latest price and the + Add a price button. Each device remembers it.
-- **+ Add a price** logs a cash bid you were offered, a target price or any other price. Targets show as lines across the chart, and the dashboard tells you when your sell price reaches one.
+- **+ Add a price** logs the average price per bushel (per ton for hay, per pound for cotton) on a date, or a target price. Targets show as lines across the chart, and the dashboard tells you when your sell price reaches one.
 - The rainfall log is on the Fields tab.
 

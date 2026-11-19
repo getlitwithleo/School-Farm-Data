@@ -236,6 +236,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { border-color
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
 .key { display: inline-block; width: 12px; height: 12px; border-radius: 3px; background: var(--c); }
 .key.line { height: 3px; width: 16px; border-radius: 2px; }
+.key.line.dash { background: repeating-linear-gradient(90deg, var(--c) 0 5px, transparent 5px 8px); border-radius: 0; }
 .chart-note { font-size: 13px; color: var(--muted); margin-top: 8px; }
 .ibar { display: inline-block; height: 8px; border-radius: 4px; background: var(--c, var(--green)); vertical-align: middle; min-width: 2px; }
 .ibar-cell { width: 34%; min-width: 90px; }
@@ -715,6 +716,9 @@ function signedMoney(v, d = 0) { if (v == null || !isFinite(v)) return '—'; re
 function fmtYield(v) { if (v == null || !isFinite(v)) return '—'; return Math.abs(v) >= 100 ? nf(v, 0) : nf(v, 1); }
 const unitPer = u => u === 'lb/ac' ? 'lb' : u === 'tons/ac' ? 'ton' : 'bu';
 function fmtPrice(v, unit) { if (v == null || !isFinite(v)) return '—'; return money(v, unit === 'lb/ac' ? 3 : 2) + '/' + unitPer(unit); }
+// An average keeps one more decimal when it lands between cents, so $3.84 and $3.85 average to $3.845, not a rounded $3.84.
+// Hay prices per ton stay to the cent.
+function fmtAvgPrice(v, unit) { if (v == null || !isFinite(v)) return '—'; if (unit === 'tons/ac') return fmtPrice(v, unit); const d = unit === 'lb/ac' ? 3 : 2, r = Math.round(v * 10 ** (d + 1)) / 10 ** (d + 1); return money(r, Math.abs(r * 10 ** d - Math.round(r * 10 ** d)) < 1e-6 ? d : d + 1) + '/' + unitPer(unit); }
 function wrapLabel(s, max = 11) { if (s.length <= max || !s.includes(' ')) return s; const w = s.split(' '); let best = null; for (let i = 1; i < w.length; i++) { const a = w.slice(0, i).join(' '), b = w.slice(i).join(' '); const sc = Math.max(a.length, b.length); if (!best || sc < best.sc) best = { sc, v: [a, b] }; } return best.v; }
 function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -1611,9 +1615,11 @@ function viewSales() {
 
 
 /* ================= Your prices: a chart of only the farm's own prices (prices added by hand, and sales) ================= */
-const SAMPLE_PRICE_POINTS = [{"date": "2026-09-21", "cropId": "corn", "kind": "bid", "price": 4.88, "note": "Co-op elevator bid for harvest delivery"}, {"date": "2026-11-02", "cropId": "corn", "kind": "bid", "price": 4.16, "note": "Ethanol plant bid"}, {"date": "2026-11-03", "cropId": "corn", "kind": "target", "price": 4.8, "note": "Sell the rest of the corn here"}, {"date": "2026-10-05", "cropId": "soybeans", "kind": "bid", "price": 12.01, "note": "River terminal bid"}];
-const PP_KINDS = [{ id: 'bid', label: 'Cash bid I was offered' }, { id: 'target', label: 'Target price' }, { id: 'note', label: 'Other price' }];
-const ppKindLabel = id => (PP_KINDS.find(k => k.id === id) || PP_KINDS[2]).label;
+const SAMPLE_PRICE_POINTS = [{"date": "2026-09-21", "cropId": "corn", "kind": "bid", "price": 4.88, "note": "Average of local elevators"}, {"date": "2026-11-02", "cropId": "corn", "kind": "bid", "price": 4.16, "note": "Average of local elevators"}, {"date": "2026-11-03", "cropId": "corn", "kind": "target", "price": 4.8, "note": "Sell the rest of the corn here"}, {"date": "2026-10-05", "cropId": "soybeans", "kind": "bid", "price": 12.01, "note": "Average of local elevators"}];
+// 'bid' is kept as the stored id so prices saved before the rename still load.
+const PP_KINDS = [{ id: 'bid', label: 'Average price' }, { id: 'target', label: 'Target price' }];
+const ppKindLabel = id => (PP_KINDS.find(k => k.id === id) || PP_KINDS[0]).label;
+const unitWord = unit => ({ bu: 'bushel', ton: 'ton', lb: 'pound' })[unitPer(unit)];
 function normPricePoint(x) {
   return { id: sid(x.id, 'pp'), date: sdate(x.date), cropId: sref(x.cropId) || 'corn', kind: PP_KINDS.some(k => k.id === x.kind) ? x.kind : 'bid', price: num(x.price) ?? 0, note: String(x.note || '').slice(0, 200) };
 }
@@ -1657,28 +1663,31 @@ function marketCard() {
       <td class="actions"><button type="button" class="icon-btn" data-act="edit-pp" data-id="${esc(p.id)}" aria-label="Edit price">${ICON.edit}</button><button type="button" class="icon-btn danger" data-act="del-pp" data-id="${esc(p.id)}" aria-label="Delete price">${ICON.del}</button></td></tr>`; }).join('')}
     </tbody></table></div></div>` : '';
   const targetLines = targets.map(p => `<p class="mkt-target">Target ${fmtPrice(p.price, unit)}${p.note ? ` (${esc(p.note)})` : ''}: your sell price of ${fmtPrice(crop.price, unit)} is <b>${crop.price >= p.price ? centsText(crop.price - p.price) + ' above it' : centsText(p.price - crop.price) + ' below it'}</b>.</p>`).join('');
+  const avg = line.length ? line.reduce((a, p) => a + p.price, 0) / line.length : null;
+  const rangeText = range[0] === 'all' ? 'all time' : 'last ' + range[1];
   const latest = added.find(p => p.kind !== 'target');
   const nAdded = added.filter(p => p.kind !== 'target').length;
-  const minSub = latest ? `${esc(crop.name)}: latest ${fmtPrice(latest.price, unit)} on ${esc(fmtDate(latest.date))} · ${nAdded} price${nAdded === 1 ? '' : 's'} added` : `No ${esc(crop.name.toLowerCase())} prices added yet`;
+  const minSub = latest ? `${esc(crop.name)}: ${avg != null ? `average ${fmtAvgPrice(avg, unit)} (${rangeText}) · ` : ''}latest ${fmtPrice(latest.price, unit)} on ${esc(fmtDate(latest.date))} · ${nAdded} price${nAdded === 1 ? '' : 's'} added` : `No ${esc(crop.name.toLowerCase())} prices added yet`;
   const base = { key: 'market', title: 'Your prices', height: 300, headExtra, post: addedTable, collapsible: true, minSub,
-    minExtra: '<button type="button" class="btn btn-primary sm" data-act="add-pp">+ Add a price</button>', sub: `${esc(crop.name)} prices you've added, and your sales · $ per ${u} · ${range[0] === 'all' ? 'all time' : 'last ' + range[1]}` };
+    minExtra: '<button type="button" class="btn btn-primary sm" data-act="add-pp">+ Add a price</button>', sub: `${esc(crop.name)} average prices you've added, and your sales · $ per ${u} · ${rangeText}` };
   if (!line.length && !sales.length) return chartCard(Object.assign(base, { pre: targetLines,
-    empty: `No ${crop.name.toLowerCase()} prices ${range[0] === 'all' || !added.some(p => p.kind !== 'target') && !(S.sales || []).some(x => x.cropId === cid && salePriced(x)) ? 'yet' : 'in this time range'}. Tap + Add a price whenever you get a bid or see a price, and they'll build a line here.` }));
+    empty: `No ${crop.name.toLowerCase()} prices ${range[0] === 'all' || !added.some(p => p.kind !== 'target') && !(S.sales || []).some(x => x.cropId === cid && salePriced(x)) ? 'yet' : 'in this time range'}. Tap + Add a price to log the average price per ${unitWord(unit)}. Your prices build a line here, with their average.` }));
   let stats = '';
   if (line.length) {
     const last = line[line.length - 1], prev = line.length > 1 ? line[line.length - 2] : null, first = line[0];
     const hi = line.reduce((a, p) => p.price > a.price ? p : a, line[0]), lo = line.reduce((a, p) => p.price < a.price ? p : a, line[0]);
-    stats = `<div class="mkt-stats"><span class="mkt-chip now"><span>Latest, ${esc(fmtDate(last.date))}</span><b>${fmtPrice(last.price, unit)}</b></span>
+    stats = `<div class="mkt-stats"><span class="mkt-chip now"><span>Average of ${line.length} price${line.length === 1 ? '' : 's'}</span><b>${fmtAvgPrice(avg, unit)}</b></span>
+      <span class="mkt-chip"><span>Latest, ${esc(fmtDate(last.date))}</span><b>${fmtPrice(last.price, unit)}</b></span>
       ${changeChip('Since your last price', last.price, prev ? prev.price : null)}${line.length > 2 ? changeChip(`Since ${fmtDate(first.date)}`, last.price, first.price) : ''}
       ${line.length > 1 ? `<span class="mkt-chip"><span>High, ${esc(fmtDate(hi.date))}</span><b>${fmtPrice(hi.price, unit)}</b></span><span class="mkt-chip"><span>Low, ${esc(fmtDate(lo.date))}</span><b>${fmtPrice(lo.price, unit)}</b></span>` : ''}</div>`;
   }
   const rows = [...line.map(p => ({ date: p.date, what: ppKindLabel(p.kind), price: p.price, note: p.note })), ...sales.map(x => ({ date: x.date, what: `Sale, ${nf(x.quantity)} ${u}`, price: x.price, note: x.buyer }))]
     .sort((a, b) => a.date.localeCompare(b.date));
   return chartCard(Object.assign(base, { pre: stats + targetLines,
-    legend: (line.length ? legendItem('var(--rain)', 'Your prices', true) : '') + (sales.length ? legendItem('var(--act)', 'Your sales') : '') + (targets.length ? legendItem('var(--ink-2)', 'Target', true) : ''),
-    aria: `Line chart of the ${crop.name.toLowerCase()} prices you added${line.length ? `, from ${fmtPrice(line[0].price, unit)} to ${fmtPrice(line[line.length - 1].price, unit)}` : ''}`,
+    legend: (line.length ? legendItem('var(--rain)', 'Your prices', true) : '') + (line.length > 1 ? '<span><i class="key line dash" style="--c:var(--rain)"></i>Average</span>' : '') + (sales.length ? legendItem('var(--act)', 'Your sales') : '') + (targets.length ? legendItem('var(--ink-2)', 'Target', true) : ''),
+    aria: `Line chart of the ${crop.name.toLowerCase()} prices you added${line.length ? `, from ${fmtPrice(line[0].price, unit)} to ${fmtPrice(line[line.length - 1].price, unit)}, averaging ${fmtAvgPrice(avg, unit)}` : ''}`,
     table: { head: [{ t: 'Date' }, { t: 'What' }, { t: 'Price', num: 1 }, { t: 'Where or why' }], rows: rows.map(r => [fmtDate(r.date, true), esc(r.what), fmtPrice(r.price, unit), esc(r.note || '—')]) },
-    build: () => buildMyPriceConfig({ line, sales, targets, unit, from }) }));
+    build: () => buildMyPriceConfig({ line, sales, targets, unit, from, avg }) }));
 }
 function buildMyPriceConfig(o) {
   const t = theme(), rain = css('--rain'), green = css('--act');
@@ -1695,7 +1704,8 @@ function buildMyPriceConfig(o) {
   if (weekly) for (let x = x0; x <= x1; x += 7) ticks.push(x);
   else { const d = ds(x0); let y = +d.slice(0, 4), m = +d.slice(5, 7); for (let k = 0; k < 60; k++) { m++; if (m > 12) { m = 1; y++; } const x = dn(`${y}-${String(m).padStart(2, '0')}-01`); if (x > x1) break; ticks.push(x); } }
   const dec = o.unit === 'lb/ac' ? 3 : 2;
-  return { custom: true, meta: { crosshair: true, refLines: o.targets.map(p => ({ v: p.price, label: `Target ${fmtPrice(p.price, o.unit)}` })),
+  return { custom: true, meta: { crosshair: true, refLines: [...(o.line.length > 1 ? [{ v: o.avg, label: `Average ${fmtAvgPrice(o.avg, o.unit)}`, color: rain, dash: [6, 4], align: 'left' }] : []),
+      ...o.targets.map(p => ({ v: p.price, label: `Target ${fmtPrice(p.price, o.unit)}` }))],
       tip: tooltip => {
         const dp = tooltip.dataPoints[0], date = ds(Math.round(dp.parsed.x)), rows = [];
         o.line.filter(p => p.date === date).forEach(p => { const prev = priceBefore(p.cropId, p.date, p.id);
@@ -1718,24 +1728,28 @@ function openPricePointModal(id) {
   const d = x || { date: today(), cropId: defCrop, kind: 'bid', price: null, note: '' };
   openModal({ title: x ? 'Edit price' : 'Add a price', submitLabel: x ? 'Save price' : 'Add price',
     body: `<div class="form-grid">
-      <div class="fld span-2"><span class="lbl" id="ppKindLbl">What kind of price?</span><div class="choice" role="radiogroup" aria-labelledby="ppKindLbl">${PP_KINDS.map(k => `<label><input type="radio" name="ppKind" value="${k.id}"${k.id === d.kind ? ' checked' : ''}><span>${k.label}</span></label>`).join('')}</div><span class="hint" id="ppKindHint"></span></div>
+      <div class="fld span-2"><span class="lbl" id="ppKindLbl">What kind of price?</span><div class="choice" role="radiogroup" aria-labelledby="ppKindLbl">${PP_KINDS.map(k => `<label><input type="radio" name="ppKind" value="${k.id}"${k.id === d.kind ? ' checked' : ''}><span${k.id === 'bid' ? ' id="ppAvgLbl"' : ''}>${k.id === 'bid' ? `Average price per ${unitWord(cropById(d.cropId).unit)}` : k.label}</span></label>`).join('')}</div><span class="hint" id="ppKindHint"></span></div>
       <div class="fld"><label for="ppDate">Date</label><input id="ppDate" type="date" value="${esc(d.date || '')}"></div>
       <div class="fld"><label for="ppCrop">Crop</label><select id="ppCrop">${S.crops.map(c => `<option value="${esc(c.id)}"${c.id === d.cropId ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
       <div class="fld"><label for="ppPrice">Price</label>${unitField('ppPrice', d.price, '$/' + unitPer(cropById(d.cropId).unit))}</div>
-      <div class="fld"><label for="ppNote">Where or why</label><input id="ppNote" type="text" value="${esc(d.note)}" placeholder="e.g. Co-op elevator bid" autocomplete="off"></div>
+      <div class="fld"><label for="ppNote">Where or why</label><input id="ppNote" type="text" value="${esc(d.note)}" placeholder="e.g. Average of local elevators" autocomplete="off"></div>
       <div class="calc" id="ppCalc" aria-live="polite"></div>
     </div>`,
     onOpen: () => {
       const upd = () => {
         const c = cropById(val('ppCrop')), k = radio('ppKind'), p = num(val('ppPrice')), prev = priceBefore(c.id, val('ppDate') || today(), x ? x.id : null);
         $('#ppPriceU').textContent = '$/' + unitPer(c.unit);
+        $('#ppAvgLbl').textContent = 'Average price per ' + unitWord(c.unit);
         $('#ppKindHint').textContent = k === 'target' ? 'Shows as a line across your price chart. The dashboard tells you when your sell price reaches it.'
-          : 'Adds a point to your price line for this crop.';
+          : `The average price per ${unitWord(c.unit)} that day. It adds a point to your price line.`;
+        const others = (S.pricePoints || []).filter(v => v.cropId === c.id && v.kind !== 'target' && (!x || v.id !== x.id));
+        const avgWith = k !== 'target' && p != null ? ` Average of all your ${c.name.toLowerCase()} prices with this one: ${fmtAvgPrice((others.reduce((a, v) => a + v.price, 0) + p) / (others.length + 1), c.unit)}.` : '';
         $('#ppCalc').textContent = k === 'target' ? (p == null ? 'Enter the target price.' : `Your sell price today is ${fmtPrice(c.price, c.unit)}, ${c.price >= p ? centsText(c.price - p) + ' above' : centsText(p - c.price) + ' below'} this target.`)
           : !prev ? (p == null ? 'Enter the price.' : `This is your first ${c.name.toLowerCase()} price.`)
           : p == null ? `Your last ${c.name.toLowerCase()} price: ${fmtPrice(prev.price, c.unit)} on ${fmtDate(prev.date, true)}.`
           : Math.abs(p - prev.price) < 0.00001 ? `Same as your last price (${fmtPrice(prev.price, c.unit)} on ${fmtDate(prev.date)}).`
           : `${p > prev.price ? '▲ Up' : '▼ Down'} ${centsText(p - prev.price)} from your last price (${fmtPrice(prev.price, c.unit)} on ${fmtDate(prev.date)}).`;
+        if (avgWith && prev) $('#ppCalc').textContent += avgWith;
       };
       ['ppCrop', 'ppDate'].forEach(i => $('#' + i).addEventListener('change', upd));
       $('#ppPrice').addEventListener('input', upd);
@@ -1903,8 +1917,10 @@ const refLinePlugin = { id: 'ffRefLine', afterDatasetsDraw(chart) {
   for (const line of (m.refLines || [m.refLine])) {
     const y = Math.round(chart.scales.y.getPixelForValue(line.v)) + 0.5;
     if (y < top - 1 || y > bottom + 1) continue;
-    ctx.save(); ctx.strokeStyle = css('--ink-2'); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
-    ctx.font = `600 11px ${css('--font-body')}`; ctx.fillStyle = css('--ink-2'); ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillText(line.label, right, y - 3); ctx.restore();
+    ctx.save(); ctx.strokeStyle = line.color || css('--ink-2'); ctx.lineWidth = line.dash ? 1.5 : 1; if (line.dash) ctx.setLineDash(line.dash);
+    ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke(); ctx.setLineDash([]);
+    ctx.font = `600 11px ${css('--font-body')}`; ctx.fillStyle = css('--ink-2'); ctx.textAlign = line.align === 'left' ? 'left' : 'right'; ctx.textBaseline = 'bottom';
+    ctx.fillText(line.label, line.align === 'left' ? left + 4 : right, y - 3); ctx.restore();
   }
 } };
 const endLabelPlugin = { id: 'ffEndLabel', afterDatasetsDraw(chart) {
@@ -2338,9 +2354,9 @@ const EXPORTS = {
   sales: { label: 'Sales', file: () => `farm-sales-${today()}.csv`, build: () => toCSV(['date', 'season', 'crop', 'field', 'buyer', 'type', 'contract_or_ticket', 'quantity', 'unit', 'price_per_unit', 'futures_per_unit', 'futures_month', 'basis', 'deductions_usd', 'gross_usd', 'net_usd', 'net_per_unit', 'moisture_pct', 'test_weight_lb_bu', 'delivered', 'deliver_by', 'notes'],
     (S.sales || []).slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(x => { const c = cropById(x.cropId), net = saleNet(x), b = saleBasis(x);
       return [x.date, x.year, c.name, x.fieldId ? (fieldById(x.fieldId) || {}).name : '', x.buyer, saleTypeLabel(x.type), x.ref, x.quantity, unitPer(c.unit), x.price, x.futures, x.futuresMonth, b == null ? '' : Math.round(b * 10000) / 10000, x.deductions, saleGross(x) == null ? '' : r2(saleGross(x)), net == null ? '' : r2(net), net == null || !x.quantity ? '' : Math.round(net / x.quantity * 10000) / 10000, x.moisture, x.testWeight, x.delivered ? 'yes' : 'no', x.deliverBy, x.notes]; })) },
-  pricenotes: { label: 'Prices added', file: () => `farm-prices-added-${today()}.csv`, build: () => toCSV(['date', 'crop', 'kind', 'price_per_unit', 'futures_that_day', 'basis', 'note'],
-    (S.pricePoints || []).slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(p => { const c = cropById(p.cropId), f = futuresOn(p.cropId, p.date);
-      return [p.date, c.name, ppKindLabel(p.kind), p.price, f ? f.price : '', f ? Math.round((p.price - f.price) * 10000) / 10000 : '', p.note]; })) },
+  pricenotes: { label: 'Prices added', file: () => `farm-prices-added-${today()}.csv`, build: () => toCSV(['date', 'crop', 'kind', 'price_per_unit', 'unit', 'note'],
+    (S.pricePoints || []).slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(p => { const c = cropById(p.cropId);
+      return [p.date, c.name, ppKindLabel(p.kind), p.price, unitPer(c.unit), p.note]; })) },
   rainfall: { label: 'Rainfall', file: () => `farm-rainfall-${today()}.csv`, build: () => toCSV(['date', 'gauge', 'inches'], S.rainfall.slice().sort((a, b) => a.date.localeCompare(b.date)).map(r => [r.date, gaugeName(r.fieldId), r.inches])) },
 };
 async function doExport(kind) {
