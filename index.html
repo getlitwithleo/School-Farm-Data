@@ -525,6 +525,17 @@ tr.blank-row td { color: var(--muted); }
   .rtable td.sp-cell { flex-wrap: wrap; }
 }
 
+/* Market chart */
+.mkt-stats { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.mkt-chip { display: inline-flex; flex-direction: column; gap: 1px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); min-width: 92px; }
+.mkt-chip span { font-size: 12px; color: var(--muted); font-weight: 600; }
+.mkt-chip b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.mkt-chip.up b { color: var(--pos-text); }
+.mkt-chip.down b { color: var(--neg-text); }
+.mkt-chip.now { background: var(--surface-2); }
+.mkt-target { font-size: 14.5px; margin: 0 0 8px; padding: 6px 10px; border-left: 3px solid var(--ink-2); background: var(--surface-2); border-radius: 0 6px 6px 0; }
+.mkt-sub { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+
 /* ---- School Farm look: emblem blue + corn gold, record-book styling ---- */
 :root {
   --blue: #1b4f8f; --blue-deep: #12355f; --gold: #f2b705; --gold-ink: #5a4300;
@@ -918,10 +929,10 @@ function buildSample() {
     [2026, '2026-11-02', 'f5', 'GS9', 'other', 2, 'Grain at 19% moisture. Waiting on a hard freeze to dry down before harvest.'],
   ];
   const observations = OBS.map(([year, date, fieldId, stage, issue, severity, note]) => ({ id: uid('o'), year, date, fieldId, stage, issue, severity, note }));
-  return { version: 1, sample: true, settings: { farmName: 'School Farm' }, crops, fields, plantings, inputs, observations, rainfall, trials: seedTrials(), sales: SAMPLE_SALES.map(x => Object.assign({ id: uid('s') }, x)) };
+  return { version: 1, sample: true, settings: { farmName: 'School Farm' }, crops, fields, plantings, inputs, observations, rainfall, trials: seedTrials(), sales: SAMPLE_SALES.map(x => Object.assign({ id: uid('s') }, x)), pricePoints: SAMPLE_PRICE_POINTS.map(x => Object.assign({ id: uid('pp') }, x)) };
 }
 function emptyState() {
-  return { version: 1, sample: false, settings: { farmName: 'School Farm' }, crops: defaultCrops(), fields: [], plantings: [], inputs: [], observations: [], rainfall: [], trials: [], sales: [] };
+  return { version: 1, sample: false, settings: { farmName: 'School Farm' }, crops: defaultCrops(), fields: [], plantings: [], inputs: [], observations: [], rainfall: [], trials: [], sales: [], pricePoints: [] };
 }
 
 /* ================= Store ================= */
@@ -951,6 +962,7 @@ function normalize(d) {
     fieldId: sref(o.fieldId), stage: String(o.stage || ''), issue: ISSUES.some(x => x.id === o.issue) ? o.issue : 'other', severity: clamp(Math.round(num(o.severity) ?? 1), 1, 5), note: String(o.note || '') }));
   out.trials = Array.isArray(d.trials) ? d.trials.map(normTrial) : seedTrials();
   out.sales = (d.sales || []).map(normSale);
+  out.pricePoints = (d.pricePoints || []).map(normPricePoint).filter(p => p.date);
   out.rainfall = (d.rainfall || []).map(r => ({ id: sid(r.id, 'r'), date: sdate(r.date), fieldId: sref(r.fieldId) || 'farm', inches: num(r.inches) ?? 0 })).filter(r => r.date);
   return out;
 }
@@ -976,7 +988,7 @@ function loadUI() {
   let u = {};
   try { u = JSON.parse(localStorage.getItem(UI_KEY) || '{}') || {}; } catch (e) { u = {}; }
   return Object.assign({ tab: 'dashboard', year: null, crop: 'all', field: 'all', compareField: null, compareMetric: 'profit', yieldUnit: null,
-    tableView: {}, trialId: null, trialSort: 'order', inputCat: 'all', obsIssue: 'all', bannerDismissed: false, showAllInputs: false, showAllRain: false }, u);
+    tableView: {}, mktCrop: null, mktRange: '6m', trialId: null, trialSort: 'order', inputCat: 'all', obsIssue: 'all', bannerDismissed: false, showAllInputs: false, showAllRain: false }, u);
 }
 function saveUI() { try { localStorage.setItem(UI_KEY, JSON.stringify(UI)); } catch (e) { /* convenience only */ } }
 function commit() { save(); render(); }
@@ -1155,10 +1167,10 @@ function chartCard(spec) {
   const toggle = chartLib !== 'failed' && !spec.empty ? `<button type="button" class="btn btn-ghost sm" data-act="toggle-view" data-id="${spec.key}" aria-pressed="${showTable}">${showTable ? 'Show chart' : 'Show table'}</button>` : '';
   return `<article class="card chart-card${spec.span ? ' span-all' : ''}" id="cc-${spec.key}">
     <div class="card-head"><div><h3>${esc(spec.title)}</h3><p class="sub">${spec.sub}</p></div><div class="card-head-actions">${spec.headExtra || ''}${toggle}</div></div>
-    ${spec.legend && !showTable ? `<div class="legend" style="margin-bottom:10px">${spec.legend}</div>` : ''}
+    ${spec.pre || ''}${spec.legend && !showTable ? `<div class="legend" style="margin-bottom:10px">${spec.legend}</div>` : ''}
     <div class="chart-box" style="height:${spec.height || 260}px"${showTable ? ' hidden' : ''}>${spec.empty ? `<div class="chart-empty">${esc(spec.empty)}</div>` : `<canvas id="ch-${spec.key}" role="img" aria-label="${esc(spec.aria || spec.title)}"></canvas>`}</div>
     <div class="table-view"${showTable ? '' : ' hidden'}>${chartLib === 'failed' ? '<p class="chart-note" style="margin:0 0 8px">Charts need an internet connection to load, so the numbers are shown as a table.</p>' : ''}${tableHtml(spec.table)}</div>
-    ${spec.note ? `<p class="chart-note">${spec.note}</p>` : ''}
+    ${spec.note ? `<p class="chart-note">${spec.note}</p>` : ''}${spec.post || ''}
   </article>`;
 }
 const legendItem = (color, label, line) => `<span><i class="key${line ? ' line' : ''}" style="--c:${color}"></i>${esc(label)}</span>`;
@@ -1195,6 +1207,13 @@ function attentionItems(F) {
     else if (st.key === 'growing' && p.expectedHarvest && dn(p.expectedHarvest) - t <= 14) items.push({ cls: 'st-growing', pill: 'Soon', text: `${f.name}: ${c.name} harvest expected in ${dn(p.expectedHarvest) - t} days`, small: fmtDate(p.expectedHarvest, true), act: 'harvest', id: p.id, btn: 'Record harvest' });
   }
   if (UI.crop === 'all') for (const id of F.fieldIds) if (!plantingFor(id, F.y)) { const f = fieldById(id); items.push({ cls: 'st-planned', pill: 'No crop', text: `${f.name} has no crop assigned for ${F.y}`, small: '', act: 'edit-planting', id: id, btn: 'Assign crop' }); }
+  let targetsShown = 0;
+  for (const p of (S.pricePoints || []).filter(v => v.kind === 'target').sort((a, b) => b.price - a.price)) {
+    const c = cropById(p.cropId);
+    if ((UI.crop !== 'all' && UI.crop !== c.id) || c.price < p.price || targetsShown >= 3) continue;
+    targetsShown++;
+    items.push({ cls: 'st-growing', pill: 'Target', text: `${c.name} sell price ${fmtPrice(c.price, c.unit)} reached your ${fmtPrice(p.price, c.unit)} target`, small: p.note || `Set ${fmtDate(p.date, true)}`, act: 'goto', id: 'sales', btn: 'Sales' });
+  }
   for (const x of (S.sales || []).filter(v => v.year === F.y && !v.delivered && v.deliverBy && (UI.crop === 'all' || v.cropId === UI.crop))) {
     const days = dn(x.deliverBy) - t, c = cropById(x.cropId);
     if (days > 14) continue;
@@ -1301,7 +1320,7 @@ function viewDashboard() {
       opts: { yMoney: true, zeroLine: true } }) });
 
   const items = attentionItems(F);
-  const attn = `<article class="card"><div class="card-head"><div><h3>Needs attention</h3><p class="sub">Harvest timing, missing yields and contracts coming due · ${F.y}</p></div></div>
+  const attn = `<article class="card"><div class="card-head"><div><h3>Needs attention</h3><p class="sub">Harvest timing, missing yields, contracts coming due and price targets · ${F.y}</p></div></div>
     ${items.length ? `<ul class="attn">${items.map(it => `<li><span class="pill ${it.cls || 'sev-pill'}"${it.sev ? ` data-sev="${it.sev}"` : ''}>${it.sev ? ICON.alert : ''}${esc(it.pill)}</span><div class="attn-text">${esc(it.text)}${it.small ? `<small>${esc(it.small)}</small>` : ''}</div><button type="button" class="btn sm" data-act="${it.act}" data-id="${esc(it.id)}">${esc(it.btn)}</button></li>`).join('')}</ul>` : '<p class="muted">Nothing needs attention for this selection.</p>'}</article>`;
 
   html += `<section class="charts">${c1}${c2}${c3}${c4}${c5}${attn}</section>`;
@@ -1536,6 +1555,7 @@ function viewSales() {
     <div class="tile"><div class="tile-label">Average basis</div><div class="tile-value">${avgBasis == null ? '—' : fmtBasis(avgBasis, 'bu/ac')}<span class="unit">/bu</span></div><div class="tile-sub">${avgBasis == null ? 'Enter the futures price on a sale to see it' : `${avgBasis < 0 ? 'under' : 'over'} futures, weighted by bushels`}</div></div>
     <div class="tile"><div class="tile-label">Still unsold</div><div class="tile-value">${moneyC(unsoldVal)}</div><div class="tile-sub">at today's sell prices</div></div>
   </section>`;
+  html += marketCard();
   html += `<section class="card"><div class="card-head"><div><h3>Marketing by crop</h3><p class="sub">Harvested crop (or expected, before harvest) compared with what's sold or contracted</p></div></div>
     ${M.length ? `<div class="table-wrap"><table class="rtable dense"><thead><tr><th>Crop</th><th class="num">Raised</th><th class="num">Sold</th><th class="num">% sold</th><th class="num">Avg price</th><th class="num">Avg futures</th><th class="num">Avg basis</th><th class="num">Net received</th><th class="num">Unsold</th><th class="num">Unsold value</th></tr></thead><tbody>
     ${M.map(m => { const u = unitPer(m.crop.unit), pct = m.pctSold == null ? null : Math.min(1, m.pctSold);
@@ -1574,6 +1594,149 @@ function viewSales() {
       <td class="actions"><button type="button" class="icon-btn" data-act="edit-sale" data-id="${esc(x.id)}" aria-label="Edit sale">${ICON.edit}</button><button type="button" class="icon-btn danger" data-act="del-sale" data-id="${esc(x.id)}" aria-label="Delete sale">${ICON.del}</button></td></tr>`; }).join('')}
     </tbody></table></div>` : `<p class="muted">No sales recorded for ${y}${UI.crop !== 'all' ? ' and this crop' : ''}. Tap <b>+ Record a sale</b> after each settlement sheet or contract.</p>`}</section>`;
   return html;
+}
+
+
+/* ================= Market chart: futures over time, with your sales and the prices you add ================= */
+const SAMPLE_PRICE_POINTS = [{"date": "2026-09-21", "cropId": "corn", "kind": "bid", "price": 4.88, "note": "Co-op elevator bid for harvest delivery"}, {"date": "2026-11-02", "cropId": "corn", "kind": "bid", "price": 4.16, "note": "Ethanol plant bid"}, {"date": "2026-11-03", "cropId": "corn", "kind": "target", "price": 4.8, "note": "Sell the rest of the corn here"}, {"date": "2026-10-05", "cropId": "soybeans", "kind": "bid", "price": 12.01, "note": "River terminal bid"}];
+const PP_KINDS = [{ id: 'bid', label: 'Cash bid I was offered' }, { id: 'target', label: 'Target price' }, { id: 'note', label: 'Other price' }];
+const ppKindLabel = id => (PP_KINDS.find(k => k.id === id) || PP_KINDS[2]).label;
+function normPricePoint(x) {
+  return { id: sid(x.id, 'pp'), date: sdate(x.date), cropId: sref(x.cropId) || 'corn', kind: PP_KINDS.some(k => k.id === x.kind) ? x.kind : 'bid', price: num(x.price) ?? 0, note: String(x.note || '').slice(0, 200) };
+}
+const MKT_RANGES = [['1m', '1 month', 31], ['3m', '3 months', 92], ['6m', '6 months', 183], ['1y', '1 year', 366]];
+let PRICE_HIST_LOADING = false;
+const exchangeDate = iso => { try { return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso)); } catch (e) { return String(iso).slice(0, 10); } };
+// Daily closes for a crop's futures, with today's quote added if it's newer than the history.
+function marketSeries(cropId) {
+  const key = MARKET_MAP[cropId]; if (!key || !PRICE_HIST) return [];
+  const pts = Object.keys(PRICE_HIST.days).sort().map(d => ({ date: d, v: PRICE_HIST.days[d][key] })).filter(p => p.v != null);
+  const q = MARKET && MARKET.quotes && MARKET.quotes[key];
+  if (q && q.time) { const qd = exchangeDate(q.time), last = pts[pts.length - 1]; if (!last || qd > last.date) pts.push({ date: qd, v: q.price }); else if (qd === last.date) last.v = q.price; }
+  return pts;
+}
+const valueOn = (series, date) => { for (let i = series.length - 1; i >= 0; i--) if (series[i].date <= date) return series[i].v; return null; };
+const centsText = d => `${parseFloat((Math.abs(d) * 100).toFixed(2))}¢`;
+function changeChip(label, now, then) {
+  if (then == null) return '';
+  const d = now - then, dir = Math.abs(d) < 0.00001 ? 'flat' : d > 0 ? 'up' : 'down';
+  return `<span class="mkt-chip ${dir}"><span>${esc(label)}</span><b>${dir === 'up' ? '▲ +' : dir === 'down' ? '▼ −' : 'No change '}${dir === 'flat' ? '' : centsText(d)}</b></span>`;
+}
+function marketCard() {
+  const mkCrops = S.crops.filter(c => MARKET_MAP[c.id]);
+  const planted = [...new Set(S.plantings.filter(p => p.year === UI.year).map(p => p.cropId))].filter(id => MARKET_MAP[id]);
+  const cid = UI.mktCrop && MARKET_MAP[UI.mktCrop] ? UI.mktCrop : (UI.crop !== 'all' && MARKET_MAP[UI.crop] ? UI.crop : planted[0] || 'corn');
+  const crop = cropById(cid), unit = crop.unit, u = unitPer(unit), key = MARKET_MAP[cid];
+  const label = cid === 'sorghum' ? 'corn' : String(((MARKET && MARKET.quotes && MARKET.quotes[key]) || {}).label || crop.name).toLowerCase();
+  const range = MKT_RANGES.find(r => r[0] === UI.mktRange) || MKT_RANGES[2];
+  const headExtra = `<label class="sr-only" for="mktCrop">Crop</label><select id="mktCrop" style="width:auto;min-width:150px">${mkCrops.map(c => `<option value="${esc(c.id)}"${c.id === cid ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
+    <div class="seg" role="group" aria-label="Time range">${MKT_RANGES.map(r => `<button type="button" data-act="mkt-range" data-id="${r[0]}" aria-pressed="${r[0] === range[0]}" aria-label="${r[1]}">${r[0].toUpperCase()}</button>`).join('')}</div>
+    <button type="button" class="btn btn-primary sm" data-act="add-pp">+ Add a price</button>`;
+  const added = (S.pricePoints || []).filter(p => p.cropId === cid).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const addedTable = added.length ? `<div style="margin-top:14px"><h4 class="mkt-sub">Prices you added</h4><div class="table-wrap"><table class="rtable dense"><thead><tr><th>Date</th><th>Kind</th><th class="num">Price</th><th class="num">Compared with</th><th>Where or why</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>
+    ${added.map(p => { const f = futuresOn(cid, p.date); const cmp = p.kind === 'target' ? `${crop.price >= p.price ? 'Sell price is ' + centsText(crop.price - p.price) + ' above' : 'Sell price is ' + centsText(p.price - crop.price) + ' below'}` : f ? `Basis ${fmtBasis(p.price - f.price, unit)} vs futures` : '—';
+      return `<tr><td class="rt-title nowrap" data-label="Date">${fmtDate(p.date, true)}</td><td data-label="Kind">${p.kind === 'target' ? '<span class="pill st-growing">Target</span>' : esc(ppKindLabel(p.kind))}</td>
+      <td class="num" data-label="Price">${fmtPrice(p.price, unit)}</td><td class="num" data-label="Compared with">${cmp}</td><td data-label="Where or why">${esc(p.note || '—')}</td>
+      <td class="actions"><button type="button" class="icon-btn" data-act="edit-pp" data-id="${esc(p.id)}" aria-label="Edit price">${ICON.edit}</button><button type="button" class="icon-btn danger" data-act="del-pp" data-id="${esc(p.id)}" aria-label="Delete price">${ICON.del}</button></td></tr>`; }).join('')}
+    </tbody></table></div></div>` : '';
+  const base = { key: 'market', title: 'Market prices', height: 300, headExtra, post: addedTable };
+  if (!PRICE_HIST) {
+    if (/^https?:/.test(location.protocol) && !PRICE_HIST_LOADING) { PRICE_HIST_LOADING = true; loadPriceHistory().then(() => { PRICE_HIST_LOADING = false; if (PRICE_HIST) softRender(); }); }
+    return chartCard(Object.assign(base, { sub: `${esc(crop.name)} · $ per ${u}`, empty: /^https?:/.test(location.protocol) ? 'Loading the market history…' : 'The market history loads on the live site.' }));
+  }
+  const all = marketSeries(cid);
+  if (!all.length) return chartCard(Object.assign(base, { sub: `${esc(crop.name)} · $ per ${u}`, empty: 'No market history for this crop yet.' }));
+  const last = all[all.length - 1], from = ds(dn(last.date) - range[2]);
+  const series = all.filter(p => p.date >= from);
+  const prev = all.length > 1 ? all[all.length - 2].v : null;
+  const hi = series.reduce((a, p) => p.v > a.v ? p : a, series[0]), lo = series.reduce((a, p) => p.v < a.v ? p : a, series[0]);
+  const basis = num(crop.basis) || 0, local = crop.autoPrice !== false && basis !== 0;
+  const sales = (S.sales || []).filter(x => x.cropId === cid && salePriced(x) && x.date && x.date >= from);
+  const dots = added.filter(p => p.kind !== 'target' && p.date >= from);
+  const targets = added.filter(p => p.kind === 'target').slice(0, 3);
+  const stats = `<div class="mkt-stats"><span class="mkt-chip now"><span>Last close, ${esc(fmtDate(last.date))}</span><b>${fmtPrice(last.v, unit)}</b></span>
+      ${changeChip('Day', last.v, prev)}${changeChip('Week', last.v, valueOn(all, ds(dn(last.date) - 7)))}${changeChip('Month', last.v, valueOn(all, ds(dn(last.date) - 30)))}
+      <span class="mkt-chip"><span>High, ${esc(fmtDate(hi.date))}</span><b>${fmtPrice(hi.v, unit)}</b></span><span class="mkt-chip"><span>Low, ${esc(fmtDate(lo.date))}</span><b>${fmtPrice(lo.v, unit)}</b></span></div>
+    ${targets.map(p => `<p class="mkt-target">Target ${fmtPrice(p.price, unit)}${p.note ? ` (${esc(p.note)})` : ''}: your sell price of ${fmtPrice(crop.price, unit)} is <b>${crop.price >= p.price ? centsText(crop.price - p.price) + ' above it' : centsText(p.price - crop.price) + ' below it'}</b>.</p>`).join('')}`;
+  const months = [];
+  for (const p of series) { const k = p.date.slice(0, 7); let m = months.find(x => x.k === k); if (!m) { m = { k, hi: p.v, lo: p.v, close: p.v }; months.push(m); } m.hi = Math.max(m.hi, p.v); m.lo = Math.min(m.lo, p.v); m.close = p.v; }
+  return chartCard(Object.assign(base, {
+    sub: `Daily close of nearby ${esc(label)} futures · $ per ${u} · last ${range[1]}`, pre: stats,
+    legend: legendItem('var(--rain)', `${label.charAt(0).toUpperCase() + label.slice(1)} futures`, true) + (local ? legendItem('var(--crop-6)', 'Futures + your basis', true) : '')
+      + (sales.length ? legendItem('var(--act)', 'Your sales') : '') + (dots.length ? legendItem('var(--cost)', 'Prices you added') : '') + (targets.length ? legendItem('var(--ink-2)', 'Target', true) : ''),
+    aria: `Line chart of ${label} futures over the last ${range[1]}, from ${fmtPrice(series[0].v, unit)} to ${fmtPrice(last.v, unit)}`,
+    table: { head: [{ t: 'Month' }, { t: 'Close', num: 1 }, { t: 'High', num: 1 }, { t: 'Low', num: 1 }],
+      rows: months.map(m => [new Date(m.k + '-15T00:00:00Z').toLocaleDateString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' }), fmtPrice(m.close, unit), fmtPrice(m.hi, unit), fmtPrice(m.lo, unit)]) },
+    build: () => buildMarketConfig({ series, local, basis, sales, dots, targets, unit, label }) }));
+}
+function buildMarketConfig(o) {
+  const t = theme(), x0 = dn(o.series[0].date), x1 = dn(o.series[o.series.length - 1].date);
+  const line = (data, col, label) => ({ type: 'line', label, data, borderColor: col, backgroundColor: col, borderWidth: 2, pointRadius: 0, pointHoverRadius: 4, pointHoverBackgroundColor: col, pointHoverBorderColor: t.surface, pointHoverBorderWidth: 2, tension: 0, order: 2 });
+  const dot = (data, col, label) => ({ type: 'scatter', label, data, backgroundColor: col, borderColor: t.surface, borderWidth: 2, pointRadius: 6, pointHoverRadius: 7, pointHitRadius: 10, order: 1 });
+  const datasets = [line(o.series.map(p => ({ x: dn(p.date), y: p.v })), css('--rain'), 'Futures')];
+  if (o.local) datasets.push(line(o.series.map(p => ({ x: dn(p.date), y: r2(p.v + o.basis) })), css('--crop-6'), 'Futures + your basis'));
+  if (o.sales.length) datasets.push(dot(o.sales.map(x => ({ x: dn(x.date), y: x.price })), css('--act'), 'Your sales'));
+  if (o.dots.length) datasets.push(dot(o.dots.map(p => ({ x: dn(p.date), y: p.price })), css('--cost'), 'Prices you added'));
+  const ys = [...o.series.map(p => p.v), ...o.sales.map(x => x.price), ...o.dots.map(p => p.price), ...o.targets.map(p => p.price), ...(o.local ? o.series.map(p => p.v + o.basis) : [])];
+  const lo = Math.min(...ys), hi = Math.max(...ys), pad = (hi - lo) * 0.08 || 0.1;
+  const ticks = []; { let d = ds(x0), y = +d.slice(0, 4), m = +d.slice(5, 7); for (let k = 0; k < 15; k++) { m++; if (m > 12) { m = 1; y++; } const x = dn(`${y}-${String(m).padStart(2, '0')}-01`); if (x > x1) break; ticks.push(x); } }
+  const dec = o.unit === 'lb/ac' ? 3 : 2;
+  return { custom: true, meta: { crosshair: true, refLines: o.targets.map(p => ({ v: p.price, label: `Target ${fmtPrice(p.price, o.unit)}` })),
+      tip: tooltip => {
+        const date = ds(Math.round(tooltip.dataPoints[0].parsed.x)), fv = valueOn(o.series, date);
+        const rows = [{ color: css('--rain'), value: fmtPrice(fv, o.unit), label: 'futures' }];
+        if (o.local) rows.push({ color: css('--crop-6'), value: fmtPrice(fv + o.basis, o.unit), label: 'futures + your basis' });
+        o.sales.filter(x => x.date === date).forEach(x => rows.push({ color: css('--act'), value: fmtPrice(x.price, o.unit), label: `sold ${nf(x.quantity)} ${unitPer(o.unit)}${x.buyer ? ' to ' + x.buyer : ''}` }));
+        o.dots.filter(p => p.date === date).forEach(p => rows.push({ color: css('--cost'), value: fmtPrice(p.price, o.unit), label: p.note || ppKindLabel(p.kind).toLowerCase() }));
+        return { title: fmtDate(date, true), rows, note: '' };
+      } },
+    config: { type: 'line', data: { datasets }, options: { responsive: true, maintainAspectRatio: false, animation: reduceMotion() ? false : { duration: 350 },
+      layout: { padding: { top: 10, right: 10 } }, interaction: { mode: 'nearest', axis: 'x', intersect: false },
+      plugins: { legend: { display: false }, tooltip: { enabled: false, external: externalTooltip } },
+      scales: {
+        x: { type: 'linear', min: x0, max: x1, grid: { display: false }, border: { color: t.base }, ticks: { color: t.ink2, autoSkip: true, maxRotation: 0, font: { size: 12 },
+          callback: v => { const s = ds(Math.round(v)), mo = new Date(dn(s) * DAY).toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' }); return s.slice(5, 7) === '01' ? `${mo} ’${s.slice(2, 4)}` : mo; } },
+          afterBuildTicks: axis => { axis.ticks = ticks.map(v => ({ value: v })); } },
+        y: { suggestedMin: lo - pad, suggestedMax: hi + pad, grid: { color: t.grid, drawTicks: false }, border: { display: false }, ticks: { color: t.muted, padding: 8, maxTicksLimit: 6, includeBounds: false, callback: v => money(v, dec) } } } } } };
+}
+function openPricePointModal(id) {
+  const x = id ? (S.pricePoints || []).find(v => v.id === id) : null;
+  const defCrop = UI.mktCrop && S.crops.some(c => c.id === UI.mktCrop) ? UI.mktCrop : (S.plantings.find(p => p.year === UI.year && MARKET_MAP[p.cropId]) || {}).cropId || 'corn';
+  const d = x || { date: today(), cropId: defCrop, kind: 'bid', price: null, note: '' };
+  openModal({ title: x ? 'Edit price' : 'Add a price', submitLabel: x ? 'Save price' : 'Add price',
+    body: `<div class="form-grid">
+      <div class="fld span-2"><span class="lbl" id="ppKindLbl">What kind of price?</span><div class="choice" role="radiogroup" aria-labelledby="ppKindLbl">${PP_KINDS.map(k => `<label><input type="radio" name="ppKind" value="${k.id}"${k.id === d.kind ? ' checked' : ''}><span>${k.label}</span></label>`).join('')}</div><span class="hint" id="ppKindHint"></span></div>
+      <div class="fld"><label for="ppDate">Date</label><input id="ppDate" type="date" value="${esc(d.date || '')}"></div>
+      <div class="fld"><label for="ppCrop">Crop</label><select id="ppCrop">${S.crops.map(c => `<option value="${esc(c.id)}"${c.id === d.cropId ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></div>
+      <div class="fld"><label for="ppPrice">Price</label>${unitField('ppPrice', d.price, '$/' + unitPer(cropById(d.cropId).unit))}</div>
+      <div class="fld"><label for="ppNote">Where or why</label><input id="ppNote" type="text" value="${esc(d.note)}" placeholder="e.g. Co-op elevator bid" autocomplete="off"></div>
+      <div class="calc" id="ppCalc" aria-live="polite"></div>
+    </div>`,
+    onOpen: () => {
+      const upd = () => {
+        const c = cropById(val('ppCrop')), k = radio('ppKind'), p = num(val('ppPrice')), f = futuresOn(c.id, val('ppDate'));
+        $('#ppPriceU').textContent = '$/' + unitPer(c.unit);
+        $('#ppKindHint').textContent = k === 'target' ? 'Shows as a line across the chart so you can see when the market gets there. The dashboard tells you when your sell price reaches it.'
+          : 'Shows as a dot on the chart, next to the futures price that day.';
+        $('#ppCalc').textContent = p == null ? (f ? `Futures that day: ${fmtPrice(f.price, c.unit)}.` : 'Enter the price.')
+          : k === 'target' ? `Your sell price today is ${fmtPrice(c.price, c.unit)}, ${c.price >= p ? centsText(c.price - p) + ' above' : centsText(p - c.price) + ' below'} this target.`
+          : f ? `Futures that day ${fmtPrice(f.price, c.unit)} · basis ${fmtBasis(p - f.price, c.unit)}` : 'No futures price for that day.';
+      };
+      ['ppCrop', 'ppDate'].forEach(i => $('#' + i).addEventListener('change', upd));
+      $('#ppPrice').addEventListener('input', upd);
+      $$('input[name="ppKind"]').forEach(r => r.addEventListener('change', upd));
+      upd(); loadPriceHistory().then(upd);
+    },
+    onSubmit: () => {
+      const date = val('ppDate'), p = num(val('ppPrice'));
+      if (!date) return 'Enter the date.';
+      if (p == null || p <= 0) return 'Enter the price.';
+      const data = { date, cropId: val('ppCrop'), kind: radio('ppKind') || 'bid', price: p, note: val('ppNote') };
+      if (x) Object.assign(x, data); else S.pricePoints.push(normPricePoint(Object.assign({ id: uid('pp') }, data)));
+      if (MARKET_MAP[data.cropId]) UI.mktCrop = data.cropId;
+      const c = cropById(data.cropId);
+      commit(); toast(`${ppKindLabel(data.kind)} of ${fmtPrice(p, c.unit)} ${x ? 'saved' : 'added to the ' + c.name.toLowerCase() + ' chart'}`);
+    } });
 }
 
 function openSaleModal(id) {
@@ -1715,15 +1878,19 @@ const valueLabelPlugin = { id: 'ffValueLabels', afterDatasetsDraw(chart) {
   ctx.restore();
 } };
 const refLinePlugin = { id: 'ffRefLine', afterDatasetsDraw(chart) {
-  const m = chartMeta.get(chart.canvas); if (!m || !m.refLine) return;
-  if (chart.options.indexAxis === 'y') {
+  const m = chartMeta.get(chart.canvas); if (!m || !(m.refLine || (m.refLines && m.refLines.length))) return;
+  if (m.refLine && chart.options.indexAxis === 'y') {
     const x = Math.round(chart.scales.x.getPixelForValue(m.refLine.v)) + 0.5, { top, bottom } = chart.chartArea, c = chart.ctx;
     c.save(); c.strokeStyle = css('--ink-2'); c.lineWidth = 1; c.beginPath(); c.moveTo(x, top - 4); c.lineTo(x, bottom); c.stroke();
     c.font = `600 11px ${css('--font-body')}`; c.fillStyle = css('--ink-2'); c.textAlign = 'center'; c.textBaseline = 'bottom'; c.fillText(m.refLine.label, x, top - 6); c.restore(); return;
   }
-  const y = Math.round(chart.scales.y.getPixelForValue(m.refLine.v)) + 0.5, { left, right } = chart.chartArea, ctx = chart.ctx;
-  ctx.save(); ctx.strokeStyle = css('--ink-2'); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
-  ctx.font = `600 11px ${css('--font-body')}`; ctx.fillStyle = css('--ink-2'); ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillText(m.refLine.label, right, y - 3); ctx.restore();
+  const { left, right, top, bottom } = chart.chartArea, ctx = chart.ctx;
+  for (const line of (m.refLines || [m.refLine])) {
+    const y = Math.round(chart.scales.y.getPixelForValue(line.v)) + 0.5;
+    if (y < top - 1 || y > bottom + 1) continue;
+    ctx.save(); ctx.strokeStyle = css('--ink-2'); ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
+    ctx.font = `600 11px ${css('--font-body')}`; ctx.fillStyle = css('--ink-2'); ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.fillText(line.label, right, y - 3); ctx.restore();
+  }
 } };
 const endLabelPlugin = { id: 'ffEndLabel', afterDatasetsDraw(chart) {
   const m = chartMeta.get(chart.canvas); if (!m || !m.endLabel) return;
@@ -2156,6 +2323,9 @@ const EXPORTS = {
   sales: { label: 'Sales', file: () => `farm-sales-${today()}.csv`, build: () => toCSV(['date', 'season', 'crop', 'field', 'buyer', 'type', 'contract_or_ticket', 'quantity', 'unit', 'price_per_unit', 'futures_per_unit', 'futures_month', 'basis', 'deductions_usd', 'gross_usd', 'net_usd', 'net_per_unit', 'moisture_pct', 'test_weight_lb_bu', 'delivered', 'deliver_by', 'notes'],
     (S.sales || []).slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(x => { const c = cropById(x.cropId), net = saleNet(x), b = saleBasis(x);
       return [x.date, x.year, c.name, x.fieldId ? (fieldById(x.fieldId) || {}).name : '', x.buyer, saleTypeLabel(x.type), x.ref, x.quantity, unitPer(c.unit), x.price, x.futures, x.futuresMonth, b == null ? '' : Math.round(b * 10000) / 10000, x.deductions, saleGross(x) == null ? '' : r2(saleGross(x)), net == null ? '' : r2(net), net == null || !x.quantity ? '' : Math.round(net / x.quantity * 10000) / 10000, x.moisture, x.testWeight, x.delivered ? 'yes' : 'no', x.deliverBy, x.notes]; })) },
+  pricenotes: { label: 'Prices added', file: () => `farm-prices-added-${today()}.csv`, build: () => toCSV(['date', 'crop', 'kind', 'price_per_unit', 'futures_that_day', 'basis', 'note'],
+    (S.pricePoints || []).slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')).map(p => { const c = cropById(p.cropId), f = futuresOn(p.cropId, p.date);
+      return [p.date, c.name, ppKindLabel(p.kind), p.price, f ? f.price : '', f ? Math.round((p.price - f.price) * 10000) / 10000 : '', p.note]; })) },
   rainfall: { label: 'Rainfall', file: () => `farm-rainfall-${today()}.csv`, build: () => toCSV(['date', 'gauge', 'inches'], S.rainfall.slice().sort((a, b) => a.date.localeCompare(b.date)).map(r => [r.date, gaugeName(r.fieldId), r.inches])) },
 };
 async function doExport(kind) {
@@ -2197,7 +2367,7 @@ function openDataModal() {
         <div class="btn-row"><button type="button" class="btn" data-act="save-wx-loc">Save location</button><button type="button" class="btn btn-ghost" data-act="wx-geo">Use this device's location</button></div><p id="wxMsg" class="small" role="status"></p></div>
       <div class="data-sec"><h3>Export</h3><p class="small muted">JSON is a full backup you can import later. CSV files open in Excel or Google Sheets.</p>
         <div class="btn-row"><button type="button" class="btn btn-primary" data-act="export" data-id="json">Download JSON backup</button></div>
-        <div class="btn-row">${['inputs', 'plantings', 'profit', 'sales', 'trials', 'rainfall'].map(k => `<button type="button" class="btn sm" data-act="export" data-id="${k}">${EXPORTS[k].label} CSV</button>`).join('')}</div>
+        <div class="btn-row">${['inputs', 'plantings', 'profit', 'sales', 'pricenotes', 'trials', 'rainfall'].map(k => `<button type="button" class="btn sm" data-act="export" data-id="${k}">${EXPORTS[k].label} CSV</button>`).join('')}</div>
         <div id="exportOut" hidden><div class="fld"><label for="exportText" id="exportLbl">File contents</label><textarea id="exportText" rows="6" readonly></textarea><span class="hint" id="exportHint"></span></div><div class="btn-row" style="margin-top:8px"><button type="button" class="btn" data-act="copy-export">Copy to clipboard</button></div></div></div>
       <div class="data-sec"><h3>Import JSON</h3><p class="small muted">Replaces everything currently saved in this browser.</p>
         <div class="fld"><label for="dFile">Choose a JSON backup file</label><input id="dFile" type="file" accept="application/json,.json"></div>
@@ -2886,11 +3056,11 @@ function forecastCard() {
 const SYNC_KEY = 'farmFieldTracker.sync.v1', PRESHARE_KEY = 'farmFieldTracker.beforeShared.v1';
 const SYNC = { mode: /^https?:/.test(location.protocol) ? 'connecting' : 'off', configured: false, empty: false, version: 0, base: null, dirty: false,
   passcode: '', canEdit: false, savedAt: null, pushing: false, again: false, timer: null, error: '', deferred: false, initOk: false };
-const SYNC_COLLS = ['crops', 'fields', 'plantings', 'inputs', 'observations', 'rainfall', 'trials', 'sales'];
+const SYNC_COLLS = ['crops', 'fields', 'plantings', 'inputs', 'observations', 'rainfall', 'trials', 'sales', 'pricePoints'];
 const EDIT_ACTS = new Set(['add-field', 'edit-field', 'del-field', 'edit-planting', 'del-planting', 'harvest', 'clear-harvest', 'add-crop', 'edit-crop', 'del-crop',
   'add-input', 'edit-input', 'del-input', 'add-sale', 'edit-sale', 'del-sale', 'edit-rain', 'del-rain', 'import-trial', 'add-trial', 'edit-trial', 'del-trial',
   'add-entry', 'edit-entry', 'del-entry', 'field-add-trial', 'field-trial-import', 'field-trial-new', 'field-trial-link', 'start-empty', 'reset-sample',
-  'save-farm', 'import-paste', 'save-wx-loc', 'sync-init', 'edit-formula', 'sp-mode']);
+  'save-farm', 'import-paste', 'save-wx-loc', 'sync-init', 'edit-formula', 'sp-mode', 'add-pp', 'edit-pp', 'del-pp']);
 const IN_DATA_MODAL = new Set(['save-farm', 'import-paste', 'save-wx-loc', 'sync-init', 'start-empty', 'reset-sample']);
 const plain = o => JSON.parse(JSON.stringify(o));
 const needsPasscode = () => SYNC.configured && !SYNC.canEdit && !['off', 'connecting'].includes(SYNC.mode);
@@ -3082,7 +3252,7 @@ const ACTIONS = {
     onOk: () => { S = buildSample(); UI.crop = 'all'; UI.field = 'all'; UI.year = defaultYear(); UI.bannerDismissed = false; commit(); toast('Sample data restored'); } }),
   'open-data': () => openDataModal(),
   'save-farm': () => { const n = val('dFarm'); if (!n) return; S.settings.farmName = n; commit(); toast('Farm name saved'); },
-  export: id => doExport(id),
+  export: async id => { if (id === 'pricenotes') await loadPriceHistory(); doExport(id); },
   'copy-export': () => copyExport(),
   'import-paste': () => { const t = val('dPaste'); if (!t) { $('#importMsg').textContent = 'Paste the JSON first.'; return; } const err = importText(t); if (err) $('#importMsg').textContent = err; },
   'add-field': () => openFieldModal(null),
@@ -3112,6 +3282,10 @@ const ACTIONS = {
   'more-inputs': () => { UI.showAllInputs = true; render(); },
   'more-rain': () => { UI.showAllRain = true; render(); },
   'edit-formula': id => openFormulaModal(id),
+  'add-pp': () => openPricePointModal(null),
+  'edit-pp': id => openPricePointModal(id),
+  'del-pp': id => withUndo('Price deleted', () => { S.pricePoints = S.pricePoints.filter(x => x.id !== id); }),
+  'mkt-range': id => { UI.mktRange = id; render(); },
   'sp-mode': id => {
     const [cid, mode] = String(id).split('|'), c = S.crops.find(x => x.id === cid); if (!c) return;
     const auto = mode === 'auto';
@@ -3197,6 +3371,7 @@ document.addEventListener('change', e => {
   else if (id === 'inCat') { UI.inputCat = e.target.value; UI.showAllInputs = false; render(); }
   else if (id === 'obsIssue') { UI.obsIssue = e.target.value; render(); }
   else if (id === 'trialSel') { UI.trialId = e.target.value; render(); }
+  else if (id === 'mktCrop') { UI.mktCrop = e.target.value; render(); }
   else if (e.target.dataset && e.target.dataset.sp) setSellPrice(e.target);
 });
 document.addEventListener('submit', e => {
