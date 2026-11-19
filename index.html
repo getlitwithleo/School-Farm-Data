@@ -508,6 +508,13 @@ tr.blank-row td { color: var(--muted); }
 .pct-bar { width: 60px; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; display: inline-block; }
 .pct-bar i { display: block; height: 100%; background: var(--green); border-radius: 4px; }
 
+/* Minimize a card */
+.min-btn { gap: 6px; }
+.min-btn svg { width: 16px; height: 16px; transition: transform .15s; transform: rotate(180deg); }
+.card.is-min .min-btn svg { transform: none; }
+.card.is-min .card-head { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
+@media (prefers-reduced-motion: reduce) { .min-btn svg { transition: none; } }
+
 /* Sell price editor */
 .sp-edit { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .sp-input { width: 150px; }
@@ -673,6 +680,7 @@ const SEVERITY = ['', 'Low', 'Minor', 'Moderate', 'High', 'Severe'];
 const SOILS = ['Silt loam', 'Silty clay loam', 'Clay loam', 'Loam', 'Sandy loam', 'Loamy sand', 'Clay', 'Muck / organic', 'Other'];
 const UNITS = ['bu/ac', 'lb/ac', 'tons/ac'];
 const ICON = {
+  chev: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
   edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
   del: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>',
   pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>',
@@ -988,7 +996,7 @@ function loadUI() {
   let u = {};
   try { u = JSON.parse(localStorage.getItem(UI_KEY) || '{}') || {}; } catch (e) { u = {}; }
   return Object.assign({ tab: 'dashboard', year: null, crop: 'all', field: 'all', compareField: null, compareMetric: 'profit', yieldUnit: null,
-    tableView: {}, mktCrop: null, mktRange: '6m', trialId: null, trialSort: 'order', inputCat: 'all', obsIssue: 'all', bannerDismissed: false, showAllInputs: false, showAllRain: false }, u);
+    tableView: {}, minimized: {}, mktCrop: null, mktRange: '6m', trialId: null, trialSort: 'order', inputCat: 'all', obsIssue: 'all', bannerDismissed: false, showAllInputs: false, showAllRain: false }, u);
 }
 function saveUI() { try { localStorage.setItem(UI_KEY, JSON.stringify(UI)); } catch (e) { /* convenience only */ } }
 function commit() { save(); render(); }
@@ -1162,11 +1170,16 @@ function tableHtml(t) {
   }</tbody>${t.foot ? `<tfoot><tr>${t.foot.map((c, ci) => `<td class="${t.head[ci].num ? 'num' : ''}${ci === 0 ? ' rt-title' : ''}" data-label="${esc(t.head[ci].t)}">${c}</td>`).join('')}${bar ? '<td></td>' : ''}</tr></tfoot>` : ''}</table></div>`;
 }
 function chartCard(spec) {
+  const min = !!(spec.collapsible && UI.minimized && UI.minimized[spec.key]);
+  const minBtn = spec.collapsible ? `<button type="button" class="btn btn-ghost sm min-btn" id="min-${spec.key}" data-act="toggle-min" data-id="${spec.key}" aria-expanded="${!min}">${ICON.chev}${min ? 'Expand' : 'Minimize'}</button>` : '';
+  // Minimized: just the title, a one-line summary and the card's main button.
+  if (min) return `<article class="card chart-card is-min${spec.span ? ' span-all' : ''}" id="cc-${spec.key}">
+    <div class="card-head"><div><h3>${esc(spec.title)}</h3><p class="sub">${spec.minSub || spec.sub}</p></div><div class="card-head-actions">${spec.minExtra || ''}${minBtn}</div></div></article>`;
   if (!spec.empty) pendingCharts.push(spec);
   const showTable = !!UI.tableView[spec.key] || chartLib === 'failed';
   const toggle = chartLib !== 'failed' && !spec.empty ? `<button type="button" class="btn btn-ghost sm" data-act="toggle-view" data-id="${spec.key}" aria-pressed="${showTable}">${showTable ? 'Show chart' : 'Show table'}</button>` : '';
   return `<article class="card chart-card${spec.span ? ' span-all' : ''}" id="cc-${spec.key}">
-    <div class="card-head"><div><h3>${esc(spec.title)}</h3><p class="sub">${spec.sub}</p></div><div class="card-head-actions">${spec.headExtra || ''}${toggle}</div></div>
+    <div class="card-head"><div><h3>${esc(spec.title)}</h3><p class="sub">${spec.sub}</p></div><div class="card-head-actions">${spec.headExtra || ''}${toggle}${minBtn}</div></div>
     ${spec.pre || ''}${spec.legend && !showTable ? `<div class="legend" style="margin-bottom:10px">${spec.legend}</div>` : ''}
     <div class="chart-box" style="height:${spec.height || 260}px"${showTable ? ' hidden' : ''}>${spec.empty ? `<div class="chart-empty">${esc(spec.empty)}</div>` : `<canvas id="ch-${spec.key}" role="img" aria-label="${esc(spec.aria || spec.title)}"></canvas>`}</div>
     <div class="table-view"${showTable ? '' : ' hidden'}>${chartLib === 'failed' ? '<p class="chart-note" style="margin:0 0 8px">Charts need an internet connection to load, so the numbers are shown as a table.</p>' : ''}${tableHtml(spec.table)}</div>
@@ -1644,7 +1657,11 @@ function marketCard() {
       <td class="actions"><button type="button" class="icon-btn" data-act="edit-pp" data-id="${esc(p.id)}" aria-label="Edit price">${ICON.edit}</button><button type="button" class="icon-btn danger" data-act="del-pp" data-id="${esc(p.id)}" aria-label="Delete price">${ICON.del}</button></td></tr>`; }).join('')}
     </tbody></table></div></div>` : '';
   const targetLines = targets.map(p => `<p class="mkt-target">Target ${fmtPrice(p.price, unit)}${p.note ? ` (${esc(p.note)})` : ''}: your sell price of ${fmtPrice(crop.price, unit)} is <b>${crop.price >= p.price ? centsText(crop.price - p.price) + ' above it' : centsText(p.price - crop.price) + ' below it'}</b>.</p>`).join('');
-  const base = { key: 'market', title: 'Your prices', height: 300, headExtra, post: addedTable, sub: `${esc(crop.name)} prices you've added, and your sales · $ per ${u} · ${range[0] === 'all' ? 'all time' : 'last ' + range[1]}` };
+  const latest = added.find(p => p.kind !== 'target');
+  const nAdded = added.filter(p => p.kind !== 'target').length;
+  const minSub = latest ? `${esc(crop.name)}: latest ${fmtPrice(latest.price, unit)} on ${esc(fmtDate(latest.date))} · ${nAdded} price${nAdded === 1 ? '' : 's'} added` : `No ${esc(crop.name.toLowerCase())} prices added yet`;
+  const base = { key: 'market', title: 'Your prices', height: 300, headExtra, post: addedTable, collapsible: true, minSub,
+    minExtra: '<button type="button" class="btn btn-primary sm" data-act="add-pp">+ Add a price</button>', sub: `${esc(crop.name)} prices you've added, and your sales · $ per ${u} · ${range[0] === 'all' ? 'all time' : 'last ' + range[1]}` };
   if (!line.length && !sales.length) return chartCard(Object.assign(base, { pre: targetLines,
     empty: `No ${crop.name.toLowerCase()} prices ${range[0] === 'all' || !added.some(p => p.kind !== 'target') && !(S.sales || []).some(x => x.cropId === cid && salePriced(x)) ? 'yet' : 'in this time range'}. Tap + Add a price whenever you get a bid or see a price, and they'll build a line here.` }));
   let stats = '';
@@ -3275,6 +3292,7 @@ const ACTIONS = {
   'edit-rain': id => openRainModal(id),
   'del-rain': id => withUndo('Rain reading deleted', () => { S.rainfall = S.rainfall.filter(x => x.id !== id); if (String(id).startsWith('auto-')) S.settings.hiddenAuto = [...new Set([...(S.settings.hiddenAuto || []), id])]; }),
   'toggle-view': id => { UI.tableView[id] = !UI.tableView[id]; render(); },
+  'toggle-min': id => { UI.minimized = Object.assign({}, UI.minimized, { [id]: !(UI.minimized || {})[id] }); render(); },
   'yield-unit': id => { UI.yieldUnit = id; render(); },
   'compare-metric': id => { UI.compareMetric = id; render(); },
   'more-inputs': () => { UI.showAllInputs = true; render(); },
