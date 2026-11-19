@@ -38,7 +38,7 @@ The Sales tab records each sale or contract: date, crop and season, field (optio
 - Marketing by crop compares what was raised (harvested, or expected before harvest) with what's sold or contracted, and values the unsold grain at today's sell price.
 - Yield & Profit uses what you were paid for the sold bushels and today's sell price for the rest. A sale price typed on a field's harvest still takes priority.
 - Contracts not yet delivered show under Needs attention on the dashboard when they're due within two weeks.
-- **Market prices** charts the daily futures close for a crop over the last 1, 3, 6 or 12 months, with the change for the day, week and month and the high and low. If the crop has a basis, a second line shows futures + basis. Your sales show as dots.
-- **+ Add a price** logs a cash bid you were offered, a target price or any other price. Bids show as dots next to that day's futures. Targets show as lines across the chart, and the dashboard tells you when your sell price reaches one.
+- **Your prices** charts only the farm's own prices for a crop: the prices you add, connected as a line, and your sales as dots, over the last 1, 3, 6 or 12 months or all time. Above it: your latest price, the change since your last price and over the range, and your high and low.
+- **+ Add a price** logs a cash bid you were offered, a target price or any other price. Targets show as lines across the chart, and the dashboard tells you when your sell price reaches one.
 - The rainfall log is on the Fields tab.
 
