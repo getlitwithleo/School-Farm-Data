@@ -46,6 +46,8 @@ The Sales tab records each sale or contract: date, crop and season, field (optio
 
 ## Field map
 
+**Switched off for now while it's being worked on.** The tab is hidden from everyone. To see it, open the site with `?preview=map`, for example https://school-farm-data.getlitwithleo.workers.dev/?preview=map#map. To put it back for everyone, set `MAP_FOR_EVERYONE` to `true` in `index.html`. Field outlines that were drawn stay saved with the fields either way.
+
 The Field Map tab shows the farm's fields on a satellite picture.
 
 - **Search** above the map: as you type, a dropdown lists matching places (towns, roads, schools, lakes, addresses), nearest the map first. Press **Search** or Enter to list every match, then pick one and the map zooms into it and marks it with a dot. Arrow keys and Enter work too, and GPS coordinates like `43.11, -88.49` go straight there. **My location** moves the map to where your phone is. Each device remembers the last place it picked, so the map opens there until fields are drawn.

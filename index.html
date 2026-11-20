@@ -405,7 +405,7 @@ tr.blank-row td { color: var(--muted); }
   .quick .q-gauge { grid-column: 1 / -1; order: -1; }
   .rain-summary b { font-size: 20px; }
   .modal, .modal.wide { left: 0; right: 0; top: auto; bottom: 0; transform: none; width: 100%; max-height: 94%; border-radius: 16px 16px 0 0; }
-  .bottomnav { display: grid; grid-template-columns: repeat(7, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--surface); border-top: 1px solid var(--line-strong); padding-bottom: env(safe-area-inset-bottom); }
+  .bottomnav { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--surface); border-top: 1px solid var(--line-strong); padding-bottom: env(safe-area-inset-bottom); }
   .bottomnav button { appearance: none; border: 0; background: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 62px; font-size: 11px; font-weight: 600; color: var(--muted); cursor: pointer; padding: 6px 1px; }
   .bottomnav button svg { width: 24px; height: 24px; }
   .bottomnav button[aria-selected="true"] { color: var(--green-text); }
@@ -713,7 +713,11 @@ th.num { font-family: var(--font-body); }
 const STORE_KEY = 'farmFieldTracker.data.v1';
 const UI_KEY = 'farmFieldTracker.ui.v1';
 const SAMPLE_ASOF = '2026-11-08';
-const TABS = [
+// The Field Map is switched off while it's being worked on. Open the site with ?preview=map to see it anyway.
+// Set MAP_FOR_EVERYONE to true to put it back in everyone's navigation.
+const MAP_FOR_EVERYONE = false;
+const MAP_ON = MAP_FOR_EVERYONE || /[?&]preview=map(&|$)/.test(location.search);
+const ALL_TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: '<path d="M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z"/>' },
   { id: 'fields', label: 'Fields', icon: '<path d="M3 19c5-5 13-5 18 0M3 13c5-5 13-5 18 0M3 7c5-5 13-5 18 0"/>' },
   { id: 'map', label: 'Field Map', short: 'Map', icon: '<path d="M9 4 3 6.5V20l6-2.5 6 2.5 6-2.5V4l-6 2.5L9 4zM9 4v13.5M15 6.5V20"/>' },
@@ -722,6 +726,7 @@ const TABS = [
   { id: 'yield', label: 'Yield & Profit', short: 'Yield', icon: '<path d="M4 20h16M7 16v-5M12 16V6M17 16v-8"/>' },
   { id: 'trials', label: 'Hybrid Trials', short: 'Trials', icon: '<rect x="3.5" y="3" width="4" height="18" rx="1"/><rect x="10" y="3" width="4" height="18" rx="1"/><rect x="16.5" y="3" width="4" height="18" rx="1"/>' },
 ];
+const TABS = ALL_TABS.filter(t => t.id !== 'map' || MAP_ON);
 const CATEGORIES = [
   { id: 'seed', label: 'Seed', units: ['seeds/ac', 'lb/ac', 'bu/ac', 'units'] },
   { id: 'fertilizer', label: 'Fertilizer', units: ['lb/ac', 'gal/ac', 'tons/ac'] },
@@ -1219,6 +1224,7 @@ function render() {
   let html = '';
   if (S.sample && !UI.bannerDismissed) html += `<div class="banner" role="status"><p>You're looking at sample data for a 548-acre farm. Edit anything, or start with an empty farm.</p><div class="btns"><button class="btn sm" data-act="start-empty">Start empty</button><button class="btn sm btn-ghost" data-act="dismiss-banner">Keep sample data</button></div></div>`;
   if (!storageOk) html += `<div class="banner warn" role="alert"><p>This browser isn't letting the page save. Your changes will be lost when you close it, so use Data &amp; export to download a JSON backup.</p></div>`;
+  if (!TABS.some(t => t.id === UI.tab)) UI.tab = 'dashboard';
   const views = { dashboard: viewDashboard, fields: viewFields, map: viewMap, inputs: viewInputs, sales: viewSales, yield: viewYield, trials: viewTrials };
   html += (views[UI.tab] || viewDashboard)();
   v.innerHTML = html;
