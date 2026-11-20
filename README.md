@@ -48,7 +48,8 @@ The Sales tab records each sale or contract: date, crop and season, field (optio
 
 The Field Map tab shows the farm's fields on a satellite picture.
 
-- **+ Map a field** (or **Draw it** next to a field) opens the picture. Find the farm by searching an address or road, by tapping **My location** while standing at the field, or by dragging and zooming. Then tap each corner of the field in order. Drag a corner to move it, tap a small dot on an edge to add a corner there, and use **Undo last corner** or **Start over** to fix mistakes.
+- **Search** above the map finds an address, road, town or landmark (or GPS coordinates like `43.11, -88.49`) and moves the map there with a dot. If more than one place matches, the others are listed to pick from. **My location** moves the map to where your phone is. Each device remembers the last place it searched, so the map opens there until fields are drawn.
+- **+ Map a field** (or **Draw it** next to a field) opens the picture, starting where the page map was looking. Find the farm by searching an address or road, by tapping **My location** while standing at the field, or by dragging and zooming. Then tap each corner of the field in order. Drag a corner to move it, tap a small dot on an edge to add a corner there, and use **Undo last corner** or **Start over** to fix mistakes.
 - The page measures the outline in acres and offers to update the field's acres to match.
 - Color the fields by **Crop**, **Yield** (harvested yield compared with the expected yield) or **Profit** per acre. Yield and profit use a blue-to-red scale with gray for about average, so the colors stand out from the crops in the picture.
 - Tap a field for its crop, acres, yield and profit, with buttons to edit the field or its shape. The Season, Crop and Field filters fade out the fields that don't match.
