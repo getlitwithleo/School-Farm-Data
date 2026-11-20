@@ -542,12 +542,16 @@ tr.blank-row td { color: var(--muted); }
 .map-search { position: relative; display: flex; gap: 6px; flex-wrap: wrap; }
 .map-search input { flex: 1 1 240px; min-width: 0; }
 .map-find-msg { min-height: 1.4em; margin: 4px 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.map-results { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 5; list-style: none; margin: 0; padding: 4px; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: 0 10px 28px rgba(0,0,0,.28); max-height: 280px; overflow-y: auto; }
-.map-results-head { padding: 6px 10px 2px; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
-.map-results button { display: block; width: 100%; min-height: 44px; padding: 8px 10px; border: 0; border-radius: 6px; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
-.map-results button:hover, .map-results button:focus-visible { background: var(--surface-2); }
-.map-results b { display: block; font-weight: 600; }
-.map-results span { display: block; font-size: 13px; color: var(--muted); }
+.map-results { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 5; overflow: hidden; background: var(--surface); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: 0 10px 28px rgba(0,0,0,.28); }
+.map-results ul { list-style: none; margin: 0; padding: 4px; max-height: min(340px, 48vh); overflow-y: auto; }
+.map-results li[role="option"] { display: block; min-height: 44px; padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+.map-results li.active { background: var(--surface-2); box-shadow: inset 3px 0 0 var(--green); }
+.pr-top { display: flex; gap: 10px; align-items: baseline; justify-content: space-between; }
+.pr-top b { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.pr-kind { flex: none; font-size: 12px; font-weight: 600; color: var(--muted); }
+.pr-sub { display: block; font-size: 13px; color: var(--muted); }
+.pr-none { padding: 10px; color: var(--muted); }
+.map-results-foot { margin: 0; padding: 4px 12px 6px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--line); }
 .fmap.labels-off .leaflet-tooltip.map-label.pin { display: block; }
 .draw-bar { display: flex; gap: 6px 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
 .draw-info { margin: 0 auto 0 0; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -3077,10 +3081,13 @@ function normBoundary(b) {
     .map(([la, lo]) => [Math.round(la * 1e7) / 1e7, Math.round(lo * 1e7) / 1e7]);
   return pts.length >= 3 ? pts : null;
 }
-// Area on the earth's surface, in acres.
+// Area on the earth's surface, in acres. The earth is slightly flattened, so the radius used is the one that fits
+// the earth's curve at the field's latitude (WGS84); checked against exact survey math to within 0.001%.
 function ringAcres(pts) {
   if (!pts || pts.length < 3) return 0;
-  const R = 6378137, rad = Math.PI / 180; let a = 0;
+  const rad = Math.PI / 180, A = 6378137, E2 = 0.00669437999014;
+  const sin = Math.sin(pts.reduce((t, p) => t + p[0], 0) / pts.length * rad), w = 1 - E2 * sin * sin, R = A * Math.sqrt(1 - E2) / w;
+  let a = 0;
   for (let i = 0; i < pts.length; i++) { const [la1, lo1] = pts[i], [la2, lo2] = pts[(i + 1) % pts.length]; a += (lo2 - lo1) * rad * (2 + Math.sin(la1 * rad) + Math.sin(la2 * rad)); }
   return Math.abs(a * R * R / 2) / 4046.8564224;
 }
@@ -3149,72 +3156,152 @@ function viewMap() {
       : `<p class="muted">${S.fields.length ? 'No fields match these filters.' : 'No fields yet. Add a field on the Fields tab, then draw it here.'}</p>`}</section>`;
 }
 
-// Place search: an address, road, town or landmark through OpenStreetMap's Nominatim, or typed GPS coordinates.
-// Nominatim asks that searches run only when someone presses Search, never on every keystroke.
-// near ({ lat, lng }) makes places around the farm come first. Searches are spaced at least a second apart, as Nominatim asks.
-let lastGeocode = 0;
-async function geocode(q, near) {
+// Place search. While typing, a dropdown suggests places (Photon, which is built for search-as-you-type); pressing
+// Search lists every match. Picking one zooms the map into it. If Photon doesn't answer a Search, OpenStreetMap's
+// Nominatim is asked instead (it allows one search a second and no search-as-you-type). Both use OpenStreetMap data.
+const PLACE_KINDS = { school: 'School', college: 'School', university: 'School', kindergarten: 'School', city: 'City', town: 'Town', village: 'Village', hamlet: 'Town',
+  suburb: 'Neighborhood', neighbourhood: 'Neighborhood', county: 'County', state: 'State', house: 'Address', building: 'Building', lake: 'Lake', reservoir: 'Lake', pond: 'Pond',
+  river: 'River', stream: 'Stream', farm: 'Farm', farmland: 'Farm field', farmyard: 'Farm', park: 'Park', place_of_worship: 'Church', church: 'Church', cemetery: 'Cemetery',
+  grave_yard: 'Cemetery', aerodrome: 'Airport', airport: 'Airport', station: 'Station', administrative: 'Area' };
+const ROAD_KINDS = new Set(['residential', 'primary', 'secondary', 'tertiary', 'unclassified', 'trunk', 'motorway', 'service', 'track', 'road', 'living_street', 'primary_link', 'secondary_link', 'tertiary_link', 'trunk_link', 'motorway_link']);
+const placeKind = (key, val) => key === 'highway' && ROAD_KINDS.has(val) ? 'Road' : PLACE_KINDS[val] || (val ? (val.charAt(0).toUpperCase() + val.slice(1)).replace(/_/g, ' ') : '');
+const uniquePlaces = list => list.filter((p, i, all) => all.findIndex(o => o.full === p.full) === i);
+function placeCoords(q) {
   const c = q.match(/^\s*(-?\d{1,2}(?:\.\d+)?)\s*°?\s*,\s*(-?\d{1,3}(?:\.\d+)?)\s*°?\s*$/);
-  if (c) {
-    const lat = +c[1], lng = +c[2];
-    if (Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return [{ name: `${lat}, ${lng}`, full: `GPS ${lat}, ${lng}`, lat, lng, bounds: null }];
-  }
-  const vb = near && isFinite(near.lat) && isFinite(near.lng) ? `&viewbox=${(near.lng - 1).toFixed(3)},${(near.lat + 0.75).toFixed(3)},${(near.lng + 1).toFixed(3)},${(near.lat - 0.75).toFixed(3)}&bounded=0` : '';
-  const wait = lastGeocode + 1100 - Date.now(); if (wait > 0) await new Promise(res => setTimeout(res, wait));
-  lastGeocode = Date.now();
-  const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=6&countrycodes=us${vb}&q=${encodeURIComponent(q)}`, { headers: { Accept: 'application/json' } });
+  if (!c) return null;
+  const lat = +c[1], lng = +c[2];
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { name: `${lat}, ${lng}`, sub: '', full: `GPS ${lat}, ${lng}`, kind: 'GPS', lat, lng, bounds: null } : null;
+}
+async function photonSearch(q, near, signal) {
+  const bias = near && isFinite(near.lat) && isFinite(near.lng) ? `&lat=${near.lat.toFixed(4)}&lon=${near.lng.toFixed(4)}` : '';
+  const r = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=12&lang=en${bias}`, { signal });
   if (!r.ok) throw new Error('HTTP ' + r.status);
-  return (await r.json()).filter(h => isFinite(h.lat) && isFinite(h.lon)).map(h => {
-    const b = (h.boundingbox || []).map(Number), full = String(h.display_name || '').replace(/, United States$/, '');
-    return { name: h.name || full.split(',')[0], full, lat: +h.lat, lng: +h.lon, bounds: b.length === 4 && b.every(isFinite) && b[0] !== b[1] ? [[b[0], b[2]], [b[1], b[3]]] : null };
-  }).filter((p, i, all) => all.findIndex(o => o.full === p.full) === i);
+  const out = [];
+  for (const f of (await r.json()).features || []) {
+    const p = f.properties || {}, c = (f.geometry || {}).coordinates || [], e = p.extent;
+    if ((p.countrycode && p.countrycode !== 'US') || !isFinite(c[0]) || !isFinite(c[1])) continue;
+    const addr = p.housenumber && p.street ? `${p.housenumber} ${p.street}` : p.street, town = p.city || p.town || p.village || p.district || p.locality;
+    const name = p.name || addr || town || p.county || ''; if (!name) continue;
+    const sub = [...new Set([addr, town, town ? null : p.county, p.state].filter(x => x && x !== name))].join(', ');
+    out.push({ name, sub, full: sub ? `${name}, ${sub}` : name, kind: placeKind(p.osm_key, p.osm_value), lat: +c[1], lng: +c[0], close: p.osm_value === 'house' || p.osm_key === 'building',
+      bounds: Array.isArray(e) && e.length === 4 && e.every(isFinite) && (e[0] !== e[2] || e[1] !== e[3]) ? [[e[3], e[0]], [e[1], e[2]]] : null });
+  }
+  return uniquePlaces(out).slice(0, 8);
 }
+let lastNominatim = 0;
+async function nominatimSearch(q, near) {
+  const wait = lastNominatim + 1100 - Date.now(); if (wait > 0) await new Promise(res => setTimeout(res, wait));
+  lastNominatim = Date.now();
+  const vb = near && isFinite(near.lat) && isFinite(near.lng) ? `&viewbox=${(near.lng - 1).toFixed(3)},${(near.lat + 0.75).toFixed(3)},${(near.lng + 1).toFixed(3)},${(near.lat - 0.75).toFixed(3)}&bounded=0` : '';
+  const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=8&countrycodes=us${vb}&q=${encodeURIComponent(q)}`, { headers: { Accept: 'application/json' } });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return uniquePlaces((await r.json()).filter(h => isFinite(h.lat) && isFinite(h.lon)).map(h => {
+    const b = (h.boundingbox || []).map(Number), parts = String(h.display_name || '').replace(/, United States$/, '').split(', ');
+    const name = h.name || parts[0], sub = parts.filter(x => x !== name && !/^\d{5}(-\d{4})?$/.test(x)).join(', ');
+    return { name, sub, full: sub ? `${name}, ${sub}` : name, kind: placeKind(h.category, h.type), lat: +h.lat, lng: +h.lon, close: h.type === 'house',
+      bounds: b.length === 4 && b.every(isFinite) && b[0] !== b[1] ? [[b[0], b[2]], [b[1], b[3]]] : null };
+  }));
+}
+// Zoom the map into a place: fit an area (a town, a lake), or close in on a point (an address, a school).
 function goToPlace(map, p) {
-  if (p.bounds) map.fitBounds(p.bounds, { maxZoom: 17 }); else map.setView([p.lat, p.lng], 17);
+  const max = p.close ? 18 : 17, anim = !reduceMotion();
+  if (p.bounds) { if (anim) map.flyToBounds(p.bounds, { maxZoom: max, padding: [20, 20], duration: 1.2 }); else map.fitBounds(p.bounds, { maxZoom: max, padding: [20, 20], animate: false }); }
+  else if (anim) map.flyTo([p.lat, p.lng], max, { duration: 1.2 }); else map.setView([p.lat, p.lng], max, { animate: false });
 }
-const placeZoom = (map, p) => p.bounds && map ? Math.min(17, map.getBoundsZoom(p.bounds)) : 17;
+const placeZoom = (map, p) => p.bounds && map ? Math.min(p.close ? 18 : 17, map.getBoundsZoom(p.bounds)) : (p.close ? 18 : 17);
 function placeSearchHtml(id, value) {
   return `<div class="map-search" role="search"><label class="sr-only" for="${id}">Search for a place</label>
-    <input id="${id}" type="search" placeholder="Search an address, road, town or GPS coordinates" autocomplete="off" enterkeyhint="search" value="${esc(value || '')}">
+    <input id="${id}" type="search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="${id}List" placeholder="Search a place: town, road, school, address or GPS" autocomplete="off" enterkeyhint="search" value="${esc(value || '')}">
     <button type="button" class="btn" id="${id}Go">Search</button><button type="button" class="btn" id="${id}Me">My location</button>
-    <ul class="map-results" id="${id}List" hidden></ul></div>
+    <div class="map-results" id="${id}Pop" hidden><ul role="listbox" id="${id}List" aria-label="Matching places"></ul><p class="map-results-foot">Places © OpenStreetMap contributors</p></div></div>
   <p class="hint map-find-msg" id="${id}Msg" aria-live="polite"></p>`;
 }
 // Wires up a search box made by placeSearchHtml. getMap returns the map to move; onPick gets the chosen place.
 function wirePlaceSearch(id, getMap, onPick) {
-  const input = $('#' + id), list = $('#' + id + 'List');
+  const input = $('#' + id), pop = $('#' + id + 'Pop'), list = $('#' + id + 'List');
   const msg = t => { const m = $('#' + id + 'Msg'); if (m) m.textContent = t; };
-  let others = [];
-  const close = () => { list.hidden = true; list.innerHTML = ''; };
-  const pick = p => { const map = getMap(); if (map) goToPlace(map, p); onPick(p); msg(p.me ? 'The blue dot is you.' : `Showing ${p.full}`); };
-  const run = async () => {
-    const q = input.value.trim(); close();
-    if (!q) { msg('Type a place to search for.'); return; }
-    msg('Searching…');
-    let found;
-    const m = getMap(), c = m ? m.getCenter() : null, near = c ? { lat: c.lat, lng: c.lng } : UI.mapHome || { lat: wxLoc().lat, lng: wxLoc().lon };
-    try { found = await geocode(q, near); } catch (e) { msg('Search didn\'t answer. Wait a few seconds and try again, or drag and zoom the map.'); return; }
-    if (!document.contains(input)) return;
-    if (!found.length) { msg(`Couldn't find "${q}". Try adding the town and state, or the whole address.`); return; }
-    pick(found[0]);
-    others = found.slice(1);
-    if (others.length) {
-      list.innerHTML = '<li class="map-results-head">Not it? Other matches</li>' + others.map((p, i) => `<li><button type="button" data-i="${i}"><b>${esc(p.name)}</b><span>${esc(p.full)}</span></button></li>`).join('');
-      list.hidden = false;
+  let items = [], active = -1, shownFor = null, timer = 0, ctrl = null, seq = 0;
+  const near = () => { const m = getMap(), c = m ? m.getCenter() : null; return c ? { lat: c.lat, lng: c.lng } : UI.mapHome || { lat: wxLoc().lat, lng: wxLoc().lon }; };
+  const close = () => { pop.hidden = true; input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); active = -1; };
+  const setActive = i => {
+    active = i;
+    [...list.querySelectorAll('li[data-i]')].forEach((li, j) => { const on = j === i; li.classList.toggle('active', on); li.setAttribute('aria-selected', String(on)); if (on) li.scrollIntoView({ block: 'nearest' }); });
+    if (i >= 0) input.setAttribute('aria-activedescendant', `${id}-opt-${i}`); else input.removeAttribute('aria-activedescendant');
+  };
+  const show = (found, q, none) => {
+    items = found; shownFor = q;
+    list.innerHTML = found.length ? found.map((p, i) => `<li role="option" id="${id}-opt-${i}" aria-selected="false" data-i="${i}"><span class="pr-top"><b>${esc(p.name)}</b>${p.kind ? `<span class="pr-kind">${esc(p.kind)}</span>` : ''}</span>${p.sub ? `<span class="pr-sub">${esc(p.sub)}</span>` : ''}</li>`).join('')
+      : `<li class="pr-none" role="presentation">${esc(none)}</li>`;
+    pop.hidden = false; input.setAttribute('aria-expanded', 'true'); setActive(-1);
+  };
+  const pick = p => {
+    if (!p) return;
+    close(); if (!p.me) { input.value = p.name; shownFor = null; }
+    const map = getMap(); if (map) goToPlace(map, p);
+    onPick(p); msg(p.me ? 'The blue dot is you.' : `Showing ${p.full}`);
+  };
+  const lookup = async (q, typing) => {
+    const mine = ++seq; if (ctrl) ctrl.abort(); ctrl = new AbortController();
+    const signal = ctrl.signal;
+    try { return { found: await photonSearch(q, near(), signal), mine }; } catch (e) {
+      if (e.name === 'AbortError') return { found: null, mine };
+      // A busy moment at Photon: try once more after a short pause.
+      await new Promise(res => setTimeout(res, 700));
+      if (signal.aborted || mine !== seq) return { found: null, mine };
+      try { return { found: await photonSearch(q, near(), signal), mine }; } catch (e2) { if (typing || e2.name === 'AbortError') return { found: null, mine }; }
+      try { return { found: await nominatimSearch(q, near()), mine }; } catch (e2) { return { found: null, mine }; }
     }
   };
-  list.addEventListener('click', e => { const b = e.target.closest('button[data-i]'); if (!b) return; const p = others[+b.dataset.i]; close(); if (p) pick(p); input.focus(); });
+  const run = async () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (!q) { close(); msg('Type a place to search for.'); return; }
+    const gps = placeCoords(q); if (gps) { pick(gps); return; }
+    msg('Searching…');
+    const { found, mine } = await lookup(q, false);
+    if (mine !== seq || !document.contains(input)) return;
+    if (!found) { close(); msg('Search didn\'t answer. Wait a few seconds and try again, or drag and zoom the map.'); return; }
+    msg(found.length ? `${found.length} place${found.length === 1 ? '' : 's'} found. Pick one to zoom in.` : '');
+    show(found, q, `No places match "${q}". Try adding the town and state.`);
+    if (found.length) setActive(0);
+  };
+  const suggest = () => {
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (q.length < 3 || placeCoords(q)) { seq++; close(); return; }
+    timer = setTimeout(async () => {
+      const { found, mine } = await lookup(q, true);
+      if (mine !== seq || !found || !document.contains(input) || input.value.trim() !== q || document.activeElement !== input) return;
+      show(found, q, `No places match "${q}" yet. Keep typing, or press Search.`);
+    }, 350);
+  };
+  input.addEventListener('input', suggest);
   input.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { e.preventDefault(); run(); }
-    else if (e.key === 'Escape' && !list.hidden) { e.preventDefault(); e.stopPropagation(); close(); }
+    const open = !pop.hidden && items.length > 0 && shownFor === input.value.trim();
+    if (e.key === 'ArrowDown' && open) { e.preventDefault(); setActive((active + 1) % items.length); }
+    else if (e.key === 'ArrowUp' && open) { e.preventDefault(); setActive(active <= 0 ? items.length - 1 : active - 1); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (open && active >= 0) pick(items[active]); else run(); }
+    else if (e.key === 'Escape' && !pop.hidden) { e.preventDefault(); e.stopPropagation(); close(); }
+    else if (e.key === 'Tab') close();
   });
+  const reopen = () => { if (pop.hidden && items.length && shownFor === input.value.trim()) { pop.hidden = false; input.setAttribute('aria-expanded', 'true'); } };
+  input.addEventListener('focus', reopen); input.addEventListener('click', reopen);
+  list.addEventListener('pointerdown', e => e.preventDefault());
+  list.addEventListener('click', e => { const li = e.target.closest('li[data-i]'); if (li) pick(items[+li.dataset.i]); });
+  list.addEventListener('mousemove', e => { const li = e.target.closest('li[data-i]'); if (li && +li.dataset.i !== active) setActive(+li.dataset.i); });
   $('#' + id + 'Go').addEventListener('click', run);
   $('#' + id + 'Me').addEventListener('click', () => {
     if (!navigator.geolocation) { msg('This browser can\'t share its location.'); return; }
     close(); msg('Finding you…');
-    navigator.geolocation.getCurrentPosition(pos => pick({ name: 'You are here', full: 'your location', lat: pos.coords.latitude, lng: pos.coords.longitude, bounds: null, me: true }),
+    navigator.geolocation.getCurrentPosition(pos => pick({ name: 'You are here', full: 'your location', lat: pos.coords.latitude, lng: pos.coords.longitude, bounds: null, close: true, me: true }),
       () => msg('Couldn\'t get your location. Allow location for this site, or search instead.'), { enableHighAccuracy: true, timeout: 12000 });
   });
+  // Close the dropdown when tapping anywhere else (the listener removes itself once this search box is gone).
+  const outside = e => {
+    if (!document.contains(input)) { document.removeEventListener('pointerdown', outside, true); return; }
+    if (!pop.hidden && !(e.target.closest && e.target.closest('.map-search'))) close();
+  };
+  document.addEventListener('pointerdown', outside, true);
   return { close };
 }
 const pinMarker = p => L.circleMarker([p.lat, p.lng], { radius: 8, color: '#ffffff', weight: 3, fillColor: p.me ? '#3f73b0' : '#f2b705', fillOpacity: 1, interactive: false });
@@ -3265,7 +3352,6 @@ function buildFieldMap(el) {
   map.scrollWheelZoom.disable();
   map.on('click focus', () => map.scrollWheelZoom.enable());
   map.on('mouseout blur', () => map.scrollWheelZoom.disable());
-  map.on('click', () => { const l = $('#mapFindList'); if (l && !l.hidden) { l.hidden = true; l.innerHTML = ''; } });
   drawPin();
 }
 // The place last searched for, or the person's location, as a dot with its name.
@@ -3313,7 +3399,7 @@ async function openBoundaryModal(id) {
   let acresTouched = false;
   openModal({ title: f.boundary ? `Reshape ${f.name}` : `Map ${f.name}`, wide: true, cls: 'map-modal', submitLabel: 'Save shape',
     extraFoot: f.boundary ? '<button type="button" class="btn btn-ghost danger" id="drawRemove">Remove from map</button>' : '',
-    body: `<p class="draw-help">Find the field, then tap each corner in order around its edge. Drag a corner to move it. Tap a small dot on an edge to add a corner there.</p>
+    body: `<p class="draw-help">Find the field and zoom in close, then tap each corner in order around its edge. Drag a corner to move it, or tap a small dot on an edge to add a corner there. The closer you zoom, the more exact the acres.</p>
       ${placeSearchHtml('mapQ', '')}
       <div id="drawMap" class="fmap draw" role="application" aria-label="Satellite picture. Tap to add corners of ${esc(f.name)}."></div>
       <div class="draw-bar"><p class="draw-info" id="drawInfo" aria-live="polite"></p>

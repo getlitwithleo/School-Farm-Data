@@ -48,10 +48,10 @@ The Sales tab records each sale or contract: date, crop and season, field (optio
 
 The Field Map tab shows the farm's fields on a satellite picture.
 
-- **Search** above the map finds an address, road, town or landmark (or GPS coordinates like `43.11, -88.49`) and moves the map there with a dot. If more than one place matches, the others are listed to pick from. **My location** moves the map to where your phone is. Each device remembers the last place it searched, so the map opens there until fields are drawn.
+- **Search** above the map: as you type, a dropdown lists matching places (towns, roads, schools, lakes, addresses), nearest the map first. Press **Search** or Enter to list every match, then pick one and the map zooms into it and marks it with a dot. Arrow keys and Enter work too, and GPS coordinates like `43.11, -88.49` go straight there. **My location** moves the map to where your phone is. Each device remembers the last place it picked, so the map opens there until fields are drawn.
 - **+ Map a field** (or **Draw it** next to a field) opens the picture, starting where the page map was looking. Find the farm by searching an address or road, by tapping **My location** while standing at the field, or by dragging and zooming. Then tap each corner of the field in order. Drag a corner to move it, tap a small dot on an edge to add a corner there, and use **Undo last corner** or **Start over** to fix mistakes.
 - The page measures the outline in acres and offers to update the field's acres to match.
 - Color the fields by **Crop**, **Yield** (harvested yield compared with the expected yield) or **Profit** per acre. Yield and profit use a blue-to-red scale with gray for about average, so the colors stand out from the crops in the picture.
 - Tap a field for its crop, acres, yield and profit, with buttons to edit the field or its shape. The Season, Crop and Field filters fade out the fields that don't match.
 - Outlines are saved with the field and shared like every other record, so editing them needs the farm passcode.
-- Satellite imagery is from Esri, the street map is from OpenStreetMap, place search uses OpenStreetMap's Nominatim, and the map itself is drawn with Leaflet. They load only when the Field Map page or a map dialog opens.
+- Satellite imagery is from Esri, the street map is from OpenStreetMap, place search uses Photon (with OpenStreetMap's Nominatim as a backup), and the map itself is drawn with Leaflet. They load only when the Field Map page or a map dialog opens.
