@@ -405,7 +405,7 @@ tr.blank-row td { color: var(--muted); }
   .quick .q-gauge { grid-column: 1 / -1; order: -1; }
   .rain-summary b { font-size: 20px; }
   .modal, .modal.wide { left: 0; right: 0; top: auto; bottom: 0; transform: none; width: 100%; max-height: 94%; border-radius: 16px 16px 0 0; }
-  .bottomnav { display: grid; grid-template-columns: repeat(6, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--surface); border-top: 1px solid var(--line-strong); padding-bottom: env(safe-area-inset-bottom); }
+  .bottomnav { display: grid; grid-template-columns: repeat(7, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--surface); border-top: 1px solid var(--line-strong); padding-bottom: env(safe-area-inset-bottom); }
   .bottomnav button { appearance: none; border: 0; background: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 62px; font-size: 11px; font-weight: 600; color: var(--muted); cursor: pointer; padding: 6px 1px; }
   .bottomnav button svg { width: 24px; height: 24px; }
   .bottomnav button[aria-selected="true"] { color: var(--green-text); }
@@ -508,6 +508,56 @@ tr.blank-row td { color: var(--muted); }
 .pct { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; }
 .pct-bar { width: 60px; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; display: inline-block; }
 .pct-bar i { display: block; height: 100%; background: var(--green); border-radius: 4px; }
+
+/* Field map */
+.fmap { position: relative; z-index: 0; isolation: isolate; height: min(68vh, 620px); min-height: 340px; border-radius: 8px; overflow: hidden; background: var(--surface-2); }
+.fmap.draw { height: min(54vh, 470px); min-height: 260px; cursor: crosshair; }
+/* A fixed height keeps the picture still while lines below it appear and disappear. */
+.modal.map-modal { height: min(900px, calc(100% - 48px)); }
+.fmap-msg { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; padding: 20px; text-align: center; color: var(--muted); }
+.map-note { margin: 0 0 12px; padding: 10px 14px; background: var(--surface-2); border-radius: 8px; }
+.map-legend { margin-top: 12px; }
+.key.none { background: transparent; border: 1.5px dashed var(--ink-2); }
+.map-actions { white-space: nowrap; }
+.map-actions .btn + .btn { margin-left: 6px; }
+.fmap .leaflet-tooltip.map-label { background: transparent; border: 0; box-shadow: none; padding: 0; color: #fff; font: 700 13px/1.25 var(--font-body); text-align: center; white-space: nowrap;
+  text-shadow: 0 0 3px rgba(0,0,0,.95), 0 1px 2px rgba(0,0,0,.95), 0 0 6px rgba(0,0,0,.6); }
+.fmap .leaflet-tooltip.map-label::before { display: none; }
+.fmap .leaflet-tooltip.map-label span { display: block; font-weight: 600; font-size: 12px; }
+.fmap .leaflet-tooltip.map-label.small { font-size: 12px; font-weight: 600; }
+.fmap .leaflet-tooltip.map-label.street { color: #1e2619; text-shadow: 0 0 3px #fff, 0 0 2px #fff, 0 0 6px #fff; }
+.fmap .leaflet-tooltip.map-label.dim { opacity: .6; }
+.fmap.labels-off .leaflet-tooltip.map-label { display: none; }
+.fmap .leaflet-popup-content-wrapper, .fmap .leaflet-popup-tip { background: var(--surface); color: var(--ink); }
+.fmap .leaflet-popup-content-wrapper { border-radius: var(--radius); box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+.fmap .leaflet-popup-content { margin: 12px 14px; font: 14px/1.4 var(--font-body); }
+.fmap.leaflet-container a.leaflet-popup-close-button { color: var(--muted); width: 32px; height: 32px; font-size: 22px; line-height: 30px; }
+.map-pop h4 { margin: 0 28px 6px 0; font-size: 16px; }
+.map-pop dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 0 0 10px; }
+.map-pop dt { color: var(--muted); }
+.map-pop dd { margin: 0; font-variant-numeric: tabular-nums; }
+.map-pop-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+.fmap .leaflet-control-attribution { font-size: 10px; }
+.draw-help { margin: 0 0 10px; }
+.draw-find { display: flex; gap: 6px; flex-wrap: wrap; }
+.draw-find input { flex: 1 1 220px; min-width: 0; }
+.draw-find-msg { min-height: 1.4em; margin: 4px 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.draw-bar { display: flex; gap: 6px 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
+.draw-info { margin: 0 auto 0 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.draw-info.bad { color: var(--neg-text); }
+.check-line { display: flex; gap: 10px; align-items: center; margin-top: 10px; cursor: pointer; }
+.check-line input { width: 20px; height: 20px; min-height: 0; flex: none; margin: 0; accent-color: var(--green); }
+.fmap .vtx, .fmap .vtx-mid { display: grid; place-items: center; }
+.vtx::after, .vtx-mid::after { display: block; }
+.vtx::after { content: ''; width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 3px solid #f2b705; box-shadow: 0 1px 4px rgba(0,0,0,.6); }
+.vtx.first::after { background: #f2b705; border-color: #fff; }
+.vtx-mid::after { content: ''; width: 9px; height: 9px; border-radius: 50%; background: rgba(255,255,255,.85); border: 2px solid #f2b705; box-shadow: 0 1px 3px rgba(0,0,0,.5); }
+@media (max-width: 720px) {
+  .fmap { height: 56vh; min-height: 300px; }
+  .fmap.draw { height: 44vh; min-height: 240px; }
+  .modal.map-modal { height: 94%; }
+  .map-actions { white-space: normal; }
+}
 
 /* Minimize a card */
 .min-btn { gap: 6px; }
@@ -655,6 +705,7 @@ const SAMPLE_ASOF = '2026-11-08';
 const TABS = [
   { id: 'dashboard', label: 'Dashboard', icon: '<path d="M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z"/>' },
   { id: 'fields', label: 'Fields', icon: '<path d="M3 19c5-5 13-5 18 0M3 13c5-5 13-5 18 0M3 7c5-5 13-5 18 0"/>' },
+  { id: 'map', label: 'Field Map', short: 'Map', icon: '<path d="M9 4 3 6.5V20l6-2.5 6 2.5 6-2.5V4l-6 2.5L9 4zM9 4v13.5M15 6.5V20"/>' },
   { id: 'inputs', label: 'Inputs', icon: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3"/>' },
   { id: 'sales', label: 'Sales', icon: '<path d="M12 3v18M16.5 7.5c0-1.7-2-3-4.5-3s-4.5 1.3-4.5 3 2 2.6 4.5 3 4.5 1.3 4.5 3-2 3-4.5 3-4.5-1.3-4.5-3"/>' },
   { id: 'yield', label: 'Yield & Profit', short: 'Yield', icon: '<path d="M4 20h16M7 16v-5M12 16V6M17 16v-8"/>' },
@@ -963,7 +1014,7 @@ function normalize(d) {
     price: num(c.price) ?? 0, basis: num(c.basis) ?? 0, autoPrice: c.autoPrice !== false, expectedYield: num(c.expectedYield) ?? 0, seasonDays: num(c.seasonDays) ?? 120,
     slot: num(c.slot), builtin: !!c.builtin, yieldFormula: String(c.yieldFormula || ''), stages: Array.isArray(c.stages) ? c.stages.filter(s => s && s.code).map(s => ({ code: String(s.code), name: String(s.name || s.code), days: num(s.days) ?? 0 })) : [] }));
   for (const c of defs) if (!out.crops.some(x => x.id === c.id)) out.crops.push(c);
-  out.fields = (d.fields || []).map(f => ({ id: sid(f.id, 'f'), name: String(f.name || 'Field'), acres: num(f.acres) ?? 0, soil: String(f.soil || ''), location: String(f.location || ''), irrigated: !!f.irrigated }));
+  out.fields = (d.fields || []).map(f => { const bd = normBoundary(f.boundary); return Object.assign({ id: sid(f.id, 'f'), name: String(f.name || 'Field'), acres: num(f.acres) ?? 0, soil: String(f.soil || ''), location: String(f.location || ''), irrigated: !!f.irrigated }, bd ? { boundary: bd } : {}); });
   out.plantings = (d.plantings || []).map(p => ({ id: sid(p.id, 'p'), fieldId: sref(p.fieldId), year: num(p.year) ?? new Date().getFullYear(), cropId: sref(p.cropId),
     variety: String(p.variety || ''), acres: num(p.acres), plantDate: sdate(p.plantDate), expectedHarvest: sdate(p.expectedHarvest), harvestDate: sdate(p.harvestDate),
     expectedYield: num(p.expectedYield), actualYield: num(p.actualYield), price: num(p.price), stageActual: cleanStageDates(p.stageActual), notes: String(p.notes || '') }));
@@ -1000,7 +1051,7 @@ function loadUI() {
   let u = {};
   try { u = JSON.parse(localStorage.getItem(UI_KEY) || '{}') || {}; } catch (e) { u = {}; }
   return Object.assign({ tab: 'dashboard', year: null, crop: 'all', field: 'all', compareField: null, compareMetric: 'profit', yieldUnit: null,
-    tableView: {}, minimized: {}, mktCrop: null, mktRange: '6m', trialId: null, trialSort: 'order', inputCat: 'all', obsIssue: 'all', bannerDismissed: false, showAllInputs: false, showAllRain: false }, u);
+    tableView: {}, minimized: {}, mapColor: 'crop', mapBase: 'sat', mktCrop: null, mktRange: '6m', trialId: null, trialSort: 'order', inputCat: 'all', obsIssue: 'all', bannerDismissed: false, showAllInputs: false, showAllRain: false }, u);
 }
 function saveUI() { try { localStorage.setItem(UI_KEY, JSON.stringify(UI)); } catch (e) { /* convenience only */ } }
 function commit() { save(); render(); }
@@ -1150,16 +1201,18 @@ function render() {
   if (mergeAutoRain()) save();
   const focusId = document.activeElement && document.activeElement.id && !document.activeElement.closest('#modalRoot') ? document.activeElement.id : null;
   destroyCharts();
+  destroyMap();
   pendingCharts = [];
   renderShell();
   const v = $('#view');
   let html = '';
   if (S.sample && !UI.bannerDismissed) html += `<div class="banner" role="status"><p>You're looking at sample data for a 548-acre farm. Edit anything, or start with an empty farm.</p><div class="btns"><button class="btn sm" data-act="start-empty">Start empty</button><button class="btn sm btn-ghost" data-act="dismiss-banner">Keep sample data</button></div></div>`;
   if (!storageOk) html += `<div class="banner warn" role="alert"><p>This browser isn't letting the page save. Your changes will be lost when you close it, so use Data &amp; export to download a JSON backup.</p></div>`;
-  const views = { dashboard: viewDashboard, fields: viewFields, inputs: viewInputs, sales: viewSales, yield: viewYield, trials: viewTrials };
+  const views = { dashboard: viewDashboard, fields: viewFields, map: viewMap, inputs: viewInputs, sales: viewSales, yield: viewYield, trials: viewTrials };
   html += (views[UI.tab] || viewDashboard)();
   v.innerHTML = html;
   mountCharts();
+  if (UI.tab === 'map') mountMap();
   saveUI();
   if (focusId) { const el = document.getElementById(focusId); if (el) el.focus({ preventScroll: true }); }
 }
@@ -2033,10 +2086,10 @@ function mountCharts() {
 
 /* ================= Modals ================= */
 let lastFocus = null;
-function openModal({ title, body, submitLabel = 'Save', onSubmit, danger = false, wide = false, onOpen, noSubmit = false, extraFoot = '' }) {
+function openModal({ title, body, submitLabel = 'Save', onSubmit, danger = false, wide = false, onOpen, noSubmit = false, extraFoot = '', cls = '' }) {
   const root = $('#modalRoot');
   if (!root.classList.contains('open')) lastFocus = document.activeElement;
-  root.innerHTML = `<div class="modal-backdrop" data-close></div><div class="modal${wide ? ' wide' : ''}" role="dialog" aria-modal="true" aria-labelledby="mTitle"><form id="mForm" novalidate>
+  root.innerHTML = `<div class="modal-backdrop" data-close></div><div class="modal${wide ? ' wide' : ''}${cls ? ' ' + cls : ''}" role="dialog" aria-modal="true" aria-labelledby="mTitle"><form id="mForm" novalidate>
     <div class="modal-head"><h2 id="mTitle" tabindex="-1">${esc(title)}</h2><button type="button" class="icon-btn" data-close aria-label="Close">${ICON.close}</button></div>
     <div class="modal-body">${body}</div>
     <div class="modal-foot"><p class="form-error" id="mErr" role="alert"></p>${extraFoot}<button type="button" class="btn" data-close>${noSubmit ? 'Close' : 'Cancel'}</button>${noSubmit ? '' : `<button type="submit" class="btn ${danger ? 'btn-danger' : 'btn-primary'}">${esc(submitLabel)}</button>`}</div>
@@ -2057,6 +2110,7 @@ function openModal({ title, body, submitLabel = 'Save', onSubmit, danger = false
 }
 function closeModal() {
   const root = $('#modalRoot'); if (!root.classList.contains('open')) return;
+  if (DMAP) { try { DMAP.remove(); } catch (e) { /* already gone */ } DMAP = null; }
   root.classList.remove('open'); root.innerHTML = ''; document.body.classList.remove('modal-open');
   if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
   if (SYNC.deferred) { SYNC.deferred = false; setTimeout(syncPoll, 50); }
@@ -2979,6 +3033,299 @@ function priceSource(c) {
   return `<div class="price-src">${esc(q.label)} futures ${fmtPrice(q.price, c.unit)}${b ? ` ${b < 0 ? '−' : '+'} ${money(Math.abs(b), c.unit === 'lb/ac' ? 3 : 2)} basis` : ', no basis'}</div>`;
 }
 
+/* ================= Field map (Leaflet loads only when the Map page or a map dialog opens) ================= */
+const LEAFLET = {
+  js: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js', jsSri: 'sha512-puJW3E/qXDqYp9IfhAI54BJEaWIfloJ7JWs7OeD5i6ruC9JZL1gERT1wjtwXFlh7CjE7ZJ+/vcRZRkIYIb6p4g==',
+  css: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css', cssSri: 'sha512-h9FcoyWjHcOcmEVkxOfTLnmZFWIH0iZhZT1H2TbOq55xssQGEJHEaIm+PgoUaZbRvQTNTluNOEfb1ZRy6D3BOw==',
+};
+let leafletLoad = null;
+function loadLeaflet() {
+  if (window.L && window.L.map && document.querySelector('link[data-leaflet]')) return Promise.resolve();
+  if (!leafletLoad) {
+    const tag = (el, src) => new Promise((resolve, reject) => { el.onload = resolve; el.onerror = () => { el.remove(); reject(new Error('Could not load ' + src)); }; document.head.append(el); });
+    const link = Object.assign(document.createElement('link'), { rel: 'stylesheet', href: LEAFLET.css, integrity: LEAFLET.cssSri, crossOrigin: 'anonymous' }); link.dataset.leaflet = '1';
+    const script = Object.assign(document.createElement('script'), { src: LEAFLET.js, integrity: LEAFLET.jsSri, crossOrigin: 'anonymous', async: true });
+    leafletLoad = Promise.all([tag(link, LEAFLET.css), tag(script, LEAFLET.js)]).catch(err => { leafletLoad = null; throw err; });
+  }
+  return leafletLoad;
+}
+const TILES = {
+  sat: ['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 18, maxZoom: 20, attribution: 'Imagery: Esri, Maxar, Earthstar Geographics, and the GIS User Community' }],
+  roads: ['https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 18, maxZoom: 20 }],
+  places: ['https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 18, maxZoom: 20 }],
+  street: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxNativeZoom: 19, maxZoom: 20, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }],
+};
+function newLeafletMap(el, base) {
+  const map = L.map(el, { zoomSnap: 0.5 });
+  map.attributionControl.setPrefix('<a href="https://leafletjs.com">Leaflet</a>');
+  (base === 'street' ? ['street'] : ['sat', 'roads', 'places']).forEach(k => L.tileLayer(TILES[k][0], TILES[k][1]).addTo(map));
+  return map;
+}
+
+// Field outlines are stored on the field as [[lat, lng], ...].
+function normBoundary(b) {
+  if (!Array.isArray(b)) return null;
+  const pts = b.slice(0, 500).map(p => Array.isArray(p) ? [Number(p[0]), Number(p[1])] : null)
+    .filter(p => p && isFinite(p[0]) && isFinite(p[1]) && Math.abs(p[0]) <= 90 && Math.abs(p[1]) <= 180)
+    .map(([la, lo]) => [Math.round(la * 1e7) / 1e7, Math.round(lo * 1e7) / 1e7]);
+  return pts.length >= 3 ? pts : null;
+}
+// Area on the earth's surface, in acres.
+function ringAcres(pts) {
+  if (!pts || pts.length < 3) return 0;
+  const R = 6378137, rad = Math.PI / 180; let a = 0;
+  for (let i = 0; i < pts.length; i++) { const [la1, lo1] = pts[i], [la2, lo2] = pts[(i + 1) % pts.length]; a += (lo2 - lo1) * rad * (2 + Math.sin(la1 * rad) + Math.sin(la2 * rad)); }
+  return Math.abs(a * R * R / 2) / 4046.8564224;
+}
+// True when two edges of the outline cross each other.
+function ringCrosses(pts) {
+  const n = pts.length; if (n < 4) return false;
+  const o = (p, q, r) => Math.sign((q[1] - p[1]) * (r[0] - q[0]) - (q[0] - p[0]) * (r[1] - q[1]));
+  const cross = (a, b, c, d) => o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0;
+  for (let i = 0; i < n; i++) for (let j = i + 2; j < n; j++) { if (i === 0 && j === n - 1) continue; if (cross(pts[i], pts[(i + 1) % n], pts[j], pts[(j + 1) % n])) return true; }
+  return false;
+}
+const acText = v => nf(v, Math.round(v * 10) % 10 ? 1 : 0);
+
+// Yield and profit use a blue-to-red scale with a gray middle; green would disappear into the crops in the picture.
+const MAP_DIV = ['#b23a2e', '#e6907a', '#d6d3cc', '#86acd9', '#2f5f9e'];
+const MAP_MODES = {
+  crop: { label: 'Crop', sub: 'Each field is colored by its crop this season.' },
+  yield: { label: 'Yield', sub: 'Harvested yield compared with the expected yield.', cuts: [0.85, 0.95, 1.05, 1.15],
+    bins: ['Under 85% of expected', '85–95%', '95–105%', '105–115%', 'Over 115% of expected'] },
+  profit: { label: 'Profit', sub: 'Profit per acre this season. Fields not yet harvested show the projected profit.', cuts: [-150, -25, 25, 150],
+    bins: ['Loss over $150/ac', 'Loss $25–150/ac', 'Within $25/ac of break-even', 'Profit $25–150/ac', 'Profit over $150/ac'] },
+};
+const binOf = (v, cuts) => cuts.filter(c => v >= c).length;
+function mapLook(f, y, mode) {
+  const p = plantingFor(f.id, y), e = p ? econ(p) : null;
+  if (!e) return { color: null, sub: `Nothing planted in ${y}`, none: 'nothing' };
+  if (mode === 'yield') return e.pct == null ? { color: null, sub: 'Not harvested yet', none: 'notyet' }
+    : { color: MAP_DIV[binOf(e.pct, MAP_MODES.yield.cuts)], sub: `${fmtYield(e.act)} ${e.crop.unit} · ${Math.round(e.pct * 100)}% of expected` };
+  if (mode === 'profit') return { color: MAP_DIV[binOf(e.netAc, MAP_MODES.profit.cuts)], sub: `${money(e.netAc)}/ac${e.harvested ? '' : ' projected'}` };
+  return { color: (e.crop.slot && css(`--crop-${e.crop.slot}`)) || css('--crop-x'), sub: e.crop.name, crop: e.crop };
+}
+const mapDimmed = (f, y) => (UI.field !== 'all' && f.id !== UI.field) || (UI.crop !== 'all' && (plantingFor(f.id, y) || {}).cropId !== UI.crop);
+
+function viewMap() {
+  const y = UI.year, mode = MAP_MODES[UI.mapColor] ? UI.mapColor : 'crop', base = UI.mapBase === 'street' ? 'street' : 'sat', M = MAP_MODES[mode];
+  const mapped = S.fields.filter(f => f.boundary), mappedAc = sum(mapped, f => ringAcres(f.boundary));
+  const seg = (act, cur, opts, label) => `<div class="seg" role="group" aria-label="${label}">${opts.map(([id, l]) => `<button type="button" data-act="${act}" data-id="${id}" aria-pressed="${id === cur}">${l}</button>`).join('')}</div>`;
+  const looks = mapped.map(f => mapLook(f, y, mode));
+  let legend = '';
+  if (mode === 'crop') {
+    const crops = [...new Map(looks.filter(l => l.crop).map(l => [l.crop.id, l.crop])).values()];
+    legend = crops.map(c => legendItem(cropVar(c), c.name)).join('');
+  } else legend = M.bins.map((b, i) => legendItem(MAP_DIV[i], b)).join('');
+  [['nothing', `Nothing planted in ${y}`], ['notyet', 'Not harvested yet']].forEach(([k, l]) => { if (looks.some(x => x.none === k)) legend += `<span><i class="key none"></i>${esc(l)}</span>`; });
+  const list = S.fields.filter(f => !mapDimmed(f, y));
+  const rows = list.map(f => {
+    const p = plantingFor(f.id, y), e = p ? econ(p) : null, ac = f.boundary ? ringAcres(f.boundary) : null;
+    return `<tr><td class="rt-title" data-label="Field">${esc(f.name)}</td>
+      <td data-label="${y} crop">${e ? `<span class="crop-name"><i class="dot" style="--c:${cropVar(e.crop)}"></i>${esc(e.crop.name)}</span>` : '<span class="muted">Nothing planted</span>'}</td>
+      <td class="num" data-label="Acres">${acText(f.acres)} ac</td>
+      <td class="num" data-label="Mapped acres">${ac != null ? `${nf(ac, 1)} ac` : '<span class="muted">Not mapped</span>'}</td>
+      <td class="num" data-label="Yield">${e && e.harvested ? `${fmtYield(e.act)} ${esc(e.crop.unit)}` : '—'}</td>
+      <td class="num" data-label="Profit per acre">${e ? `${money(e.netAc)}${e.harvested ? '' : ' <span class="muted small">projected</span>'}` : '—'}</td>
+      <td class="actions map-actions">${f.boundary ? `<button type="button" class="btn sm" data-act="map-zoom" data-id="${esc(f.id)}">Show</button>` : ''}<button type="button" class="btn sm${f.boundary ? '' : ' btn-primary'}" data-act="map-draw" data-id="${esc(f.id)}">${f.boundary ? 'Edit shape' : 'Draw it'}</button></td></tr>`;
+  }).join('');
+  return `<div class="toolbar"><div><h2>Field map</h2><p>${mapped.length} of ${S.fields.length} field${S.fields.length === 1 ? '' : 's'} on the map${mapped.length ? ` · ${nf(mappedAc, 1)} mapped acres` : ''} · ${y} season</p></div>
+    <div class="toolbar-actions"><button type="button" class="btn btn-primary" data-act="map-pick">+ Map a field</button></div></div>
+  <section class="card map-card"><div class="card-head"><div><h3>Fields by ${M.label.toLowerCase()}</h3><p class="sub">${M.sub} Tap a field for details.</p></div>
+    <div class="card-head-actions">${seg('map-color', mode, Object.entries(MAP_MODES).map(([k, v]) => [k, v.label]), 'Color fields by')}${seg('map-base', base, [['sat', 'Satellite'], ['street', 'Map']], 'Background')}</div></div>
+    ${mapped.length ? '' : `<p class="map-note">No fields on the map yet. Tap <b>+ Map a field</b>, find the farm on the picture, then tap each corner of the field.</p>`}
+    <div id="fieldMap" class="fmap" role="region" aria-label="Map of the farm's fields"><p class="fmap-msg">Loading the map…</p></div>
+    ${legend ? `<div class="legend map-legend">${legend}</div>` : ''}</section>
+  <section class="card"><div class="card-head"><div><h3>Fields</h3><p class="sub">Mapped acres are measured from the outline drawn on the map.</p></div></div>
+    ${list.length ? `<div class="table-wrap"><table class="rtable"><thead><tr><th>Field</th><th>${y} crop</th><th class="num">Acres</th><th class="num">Mapped acres</th><th class="num">Yield</th><th class="num">Profit per acre</th><th><span class="sr-only">Actions</span></th></tr></thead><tbody>${rows}</tbody></table></div>`
+      : `<p class="muted">${S.fields.length ? 'No fields match these filters.' : 'No fields yet. Add a field on the Fields tab, then draw it here.'}</p>`}</section>`;
+}
+
+let LMAP = null, DMAP = null, MAP_VIEW = null, MAP_FITKEY = null, MAP_LAYERS = {};
+function destroyMap() {
+  if (!LMAP) return;
+  try { MAP_VIEW = { c: LMAP.getCenter(), z: LMAP.getZoom() }; LMAP.remove(); } catch (e) { /* already gone */ }
+  LMAP = null; MAP_LAYERS = {};
+}
+function mountMap() {
+  const el = document.getElementById('fieldMap'); if (!el) return;
+  loadLeaflet().then(() => { if (document.getElementById('fieldMap') === el && !LMAP) buildFieldMap(el); })
+    .catch(() => { el.innerHTML = '<p class="fmap-msg">The map needs an internet connection to load. The table below still lists every field.</p>'; });
+}
+function buildFieldMap(el) {
+  el.innerHTML = '';
+  const y = UI.year, mode = MAP_MODES[UI.mapColor] ? UI.mapColor : 'crop', base = UI.mapBase === 'street' ? 'street' : 'sat';
+  const map = LMAP = newLeafletMap(el, base), line = base === 'sat' ? '#ffffff' : '#1e2619', focus = [], all = [];
+  for (const f of S.fields) {
+    if (!f.boundary) continue;
+    const look = mapLook(f, y, mode), dim = mapDimmed(f, y);
+    const style = look.color ? { color: line, weight: 2, opacity: dim ? 0.5 : 1, fillColor: look.color, fillOpacity: dim ? 0.15 : 0.6 }
+      : { color: line, weight: 2, opacity: dim ? 0.5 : 0.95, dashArray: '6 5', fillColor: '#ffffff', fillOpacity: dim ? 0.03 : 0.1 };
+    const poly = L.polygon(f.boundary, style).addTo(map);
+    poly.bindTooltip(`<b>${esc(f.name)}</b><span>${esc(look.sub)}</span>`, { permanent: true, direction: 'center', className: `map-label ${base}${dim ? ' dim' : ''}`, interactive: false });
+    poly.bindPopup(() => mapPopupHtml(f, y), { maxWidth: 280, autoPanPadding: [20, 20] });
+    poly.on('mouseover', () => poly.setStyle({ weight: 4 })).on('mouseout', () => poly.setStyle({ weight: 2 }));
+    MAP_LAYERS[f.id] = poly; all.push(...f.boundary); if (!dim) focus.push(...f.boundary);
+  }
+  map.on('popupopen', ev => {
+    const root = ev.popup.getElement(); if (!root) return;
+    root.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => { map.closePopup(); runAct(b.dataset.act, b.dataset.id); }));
+  });
+  const fitKey = [UI.field, UI.crop, y, S.fields.filter(f => f.boundary).map(f => f.id).join(',')].join('|');
+  if (MAP_VIEW && fitKey === MAP_FITKEY) map.setView(MAP_VIEW.c, MAP_VIEW.z, { animate: false });
+  else if (focus.length || all.length) map.fitBounds(focus.length ? focus : all, { padding: [30, 30], maxZoom: 17, animate: false });
+  else map.setView([wxLoc().lat, wxLoc().lon], 14, { animate: false });
+  MAP_FITKEY = fitKey;
+  const labels = () => el.classList.toggle('labels-off', map.getZoom() < 14);
+  map.on('zoomend', labels); labels();
+  // The mouse wheel scrolls the page until the map is clicked.
+  map.scrollWheelZoom.disable();
+  map.on('click focus', () => map.scrollWheelZoom.enable());
+  map.on('mouseout blur', () => map.scrollWheelZoom.disable());
+}
+function mapPopupHtml(f, y) {
+  const p = plantingFor(f.id, y), e = p ? econ(p) : null, ac = ringAcres(f.boundary);
+  const rows = [[`${y} crop`, e ? esc(e.crop.name) : 'Nothing planted'], ['Acres', `${acText(f.acres)} ac${Math.abs(ac - f.acres) >= 0.1 ? ` (${nf(ac, 1)} mapped)` : ''}`]];
+  if (e) {
+    rows.push(['Yield', e.harvested ? `${fmtYield(e.act)} ${esc(e.crop.unit)}${e.pct != null ? `, ${Math.round(e.pct * 100)}% of expected` : ''}` : `Expecting ${fmtYield(e.expY)} ${esc(e.crop.unit)}`]);
+    rows.push([e.harvested ? 'Profit' : 'Projected profit', `${money(e.netAc)}/ac`]);
+  }
+  return `<div class="map-pop"><h4>${esc(f.name)}</h4><dl>${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
+    <div class="map-pop-btns"><button type="button" class="btn sm" data-act="edit-field" data-id="${esc(f.id)}">Edit field</button><button type="button" class="btn sm" data-act="map-draw" data-id="${esc(f.id)}">Edit shape</button></div></div>`;
+}
+function runAct(act, id) {
+  const fn = ACTIONS[act]; if (!fn) return;
+  if (EDIT_ACTS.has(act) && needsPasscode()) { openUnlockModal(() => fn(id)); return; }
+  fn(id);
+}
+function showFieldOnMap(id) {
+  const f = fieldById(id); if (!f || !f.boundary || !LMAP) return;
+  LMAP.fitBounds(f.boundary, { padding: [40, 40], maxZoom: 18 });
+  const poly = MAP_LAYERS[id]; if (poly) poly.openPopup();
+  const el = document.getElementById('fieldMap'); if (el) el.scrollIntoView({ behavior: reduceMotion() ? 'auto' : 'smooth', block: 'center' });
+}
+function openMapPicker() {
+  if (!S.fields.length) { toast('Add the field first, then draw it on the map'); openFieldModal(null); return; }
+  if (S.fields.length === 1) { openBoundaryModal(S.fields[0].id); return; }
+  const first = S.fields.find(f => !f.boundary) || S.fields[0];
+  openModal({ title: 'Map a field', submitLabel: 'Next',
+    body: `<div class="fld"><label for="mpField">Which field?</label><select id="mpField">${S.fields.map(f => `<option value="${esc(f.id)}"${f === first ? ' selected' : ''}>${esc(f.name)}${f.boundary ? ' (already on the map)' : ''}</option>`).join('')}</select>
+      <span class="hint">To map a field that isn't listed, add it on the Fields tab first.</span></div>`,
+    onSubmit: () => { const id = val('mpField'); setTimeout(() => openBoundaryModal(id), 0); } });
+}
+
+// Draw or reshape a field: tap the corners on the satellite picture.
+async function openBoundaryModal(id) {
+  const f = fieldById(id); if (!f) return;
+  try { await loadLeaflet(); } catch (e) { toast('The map needs an internet connection. Try again when you\'re online.'); return; }
+  const pts = (f.boundary || []).map(p => p.slice());
+  let acresTouched = false;
+  openModal({ title: f.boundary ? `Reshape ${f.name}` : `Map ${f.name}`, wide: true, cls: 'map-modal', submitLabel: 'Save shape',
+    extraFoot: f.boundary ? '<button type="button" class="btn btn-ghost danger" id="drawRemove">Remove from map</button>' : '',
+    body: `<p class="draw-help">Find the field, then tap each corner in order around its edge. Drag a corner to move it. Tap a small dot on an edge to add a corner there.</p>
+      <div class="draw-find"><label class="sr-only" for="mapQ">Find a place</label><input id="mapQ" type="search" placeholder="Find an address, road or town" autocomplete="off" enterkeyhint="search">
+        <button type="button" class="btn sm" id="mapQGo">Find</button><button type="button" class="btn sm" id="mapMe">My location</button></div>
+      <p class="hint draw-find-msg" id="mapQMsg" aria-live="polite"></p>
+      <div id="drawMap" class="fmap draw" role="application" aria-label="Satellite picture. Tap to add corners of ${esc(f.name)}."></div>
+      <div class="draw-bar"><p class="draw-info" id="drawInfo" aria-live="polite"></p>
+        <button type="button" class="btn sm" id="drawUndo">Undo last corner</button><button type="button" class="btn sm btn-ghost danger" id="drawClear">Start over</button></div>
+      <label class="check-line" id="drawAcresWrap" hidden><input type="checkbox" id="drawAcres"><span id="drawAcresTxt"></span></label>`,
+    onOpen: () => {
+      const el = $('#drawMap'), map = DMAP = newLeafletMap(el, 'sat'), layer = L.layerGroup().addTo(map), gold = '#f2b705';
+      let shape = null, me = null;
+      S.fields.forEach(o => {
+        if (o.id === f.id || !o.boundary) return;
+        L.polygon(o.boundary, { color: '#ffffff', weight: 1.5, dashArray: '4 4', fill: false, interactive: false }).addTo(map)
+          .bindTooltip(esc(o.name), { permanent: true, direction: 'center', className: 'map-label sat small', interactive: false });
+      });
+      const vIcon = first => L.divIcon({ className: 'vtx' + (first ? ' first' : ''), iconSize: [30, 30] });
+      const mIcon = L.divIcon({ className: 'vtx-mid', iconSize: [26, 26] });
+      const msg = t => { $('#mapQMsg').textContent = t; };
+      const info = () => {
+        const n = pts.length, acres = n >= 3 ? ringAcres(pts) : 0, crosses = ringCrosses(pts), out = $('#drawInfo');
+        out.textContent = n === 0 ? 'Tap the first corner of the field.' : n < 3 ? `${n} corner${n === 1 ? '' : 's'}. Tap ${3 - n} more to make a shape.` : `${nf(acres, 1)} acres · ${n} corners`;
+        out.classList.toggle('bad', crosses);
+        if (crosses) out.textContent += '. The edges cross: drag a corner so they don\'t.';
+        const r = Math.round(acres * 10) / 10, show = n >= 3 && Math.abs(r - (f.acres || 0)) >= 0.1;
+        $('#drawAcresWrap').hidden = !show;
+        if (show) {
+          $('#drawAcresTxt').textContent = f.acres ? `Change the field's acres from ${acText(f.acres)} to ${nf(r, 1)}` : `Set the field's acres to ${nf(r, 1)}`;
+          if (!acresTouched) $('#drawAcres').checked = !f.acres;
+        }
+        $('#drawUndo').disabled = !n; $('#drawClear').disabled = !n;
+      };
+      const redraw = () => {
+        layer.clearLayers(); shape = null;
+        if (pts.length >= 3) shape = L.polygon(pts, { color: gold, weight: 3, fillColor: gold, fillOpacity: 0.25, interactive: false }).addTo(layer);
+        else if (pts.length === 2) shape = L.polyline(pts, { color: gold, weight: 3, interactive: false }).addTo(layer);
+        const edges = pts.length >= 3 ? pts.length : pts.length - 1;
+        for (let i = 0; i < edges; i++) {
+          const a = pts[i], b = pts[(i + 1) % pts.length], mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+          L.marker(mid, { icon: mIcon, keyboard: false, title: 'Add a corner here' }).on('click', () => { pts.splice(i + 1, 0, mid); redraw(); }).addTo(layer);
+        }
+        pts.forEach((p, i) => {
+          const mk = L.marker(p, { icon: vIcon(i === 0), draggable: true, keyboard: false, title: `Corner ${i + 1}` }).addTo(layer);
+          mk.on('drag', () => { const ll = mk.getLatLng(); pts[i] = [ll.lat, ll.lng]; if (shape) shape.setLatLngs(pts); info(); }).on('dragend', redraw);
+        });
+        info();
+      };
+      map.on('click', ev => { if (pts.length >= 500) return; pts.push([ev.latlng.lat, ev.latlng.lng]); redraw(); });
+      $('#drawUndo').addEventListener('click', () => { pts.pop(); redraw(); });
+      $('#drawClear').addEventListener('click', () => { pts.length = 0; redraw(); });
+      $('#drawAcres').addEventListener('change', () => { acresTouched = true; });
+      const find = async () => {
+        const q = val('mapQ').trim(); if (!q) return;
+        msg('Searching…');
+        try {
+          const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=us&q=${encodeURIComponent(q)}`, { headers: { Accept: 'application/json' } });
+          const hit = (await r.json())[0];
+          if (!hit) { msg(`Couldn't find "${q}". Try a road with the town, or the school's address.`); return; }
+          const b = hit.boundingbox.map(Number);
+          map.fitBounds([[b[0], b[2]], [b[1], b[3]]], { maxZoom: 17 });
+          msg(hit.display_name);
+        } catch (e) { msg('Search isn\'t working right now. Drag and zoom the picture instead.'); }
+      };
+      $('#mapQGo').addEventListener('click', find);
+      $('#mapQ').addEventListener('keydown', ev => { if (ev.key === 'Enter') { ev.preventDefault(); find(); } });
+      $('#mapMe').addEventListener('click', () => {
+        if (!navigator.geolocation) { msg('This browser can\'t share its location.'); return; }
+        msg('Finding you…');
+        navigator.geolocation.getCurrentPosition(pos => {
+          const ll = [pos.coords.latitude, pos.coords.longitude];
+          map.setView(ll, 18); if (me) me.remove();
+          me = L.circleMarker(ll, { radius: 8, color: '#ffffff', weight: 2, fillColor: '#3f73b0', fillOpacity: 1, interactive: false }).addTo(map);
+          msg('The blue dot is you.');
+        }, () => msg('Couldn\'t get your location. Allow location for this site, or search instead.'), { enableHighAccuracy: true, timeout: 12000 });
+      });
+      const rm = $('#drawRemove');
+      if (rm) rm.addEventListener('click', () => {
+        closeModal();
+        withUndo(`Removed ${f.name} from the map`, () => { const fx = fieldById(f.id); if (fx) delete fx.boundary; });
+      });
+      const others = S.fields.filter(o => o.boundary).flatMap(o => o.boundary);
+      setTimeout(() => {
+        if (!DMAP) return;
+        map.invalidateSize();
+        if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 18, animate: false });
+        else if (others.length) map.fitBounds(others, { padding: [40, 40], maxZoom: 17, animate: false });
+        else if (MAP_VIEW) map.setView(MAP_VIEW.c, Math.max(MAP_VIEW.z, 15), { animate: false });
+        else map.setView([wxLoc().lat, wxLoc().lon], 15, { animate: false });
+        redraw();
+      }, 60);
+      map.setView([wxLoc().lat, wxLoc().lon], 15, { animate: false });
+    },
+    onSubmit: () => {
+      if (pts.length < 3) return 'Tap at least 3 corners to outline the field.';
+      if (ringCrosses(pts)) return 'The outline crosses itself. Drag a corner so the edges don\'t cross, or tap Start over.';
+      const fx = fieldById(f.id); if (!fx) return 'This field was deleted.';
+      const acres = ringAcres(pts);
+      fx.boundary = normBoundary(pts);
+      if (!$('#drawAcresWrap').hidden && $('#drawAcres').checked) fx.acres = Math.round(acres * 10) / 10;
+      MAP_VIEW = null; MAP_FITKEY = null;
+      commit(); toast(`${fx.name} is on the map: ${nf(acres, 1)} acres`);
+    } });
+}
+
 /* ================= Forecast (National Weather Service, refreshed every hour) ================= */
 const WX_KEY = 'farmFieldTracker.wx.v1';
 const DEFAULT_WX_LOC = { lat: 43.0411, lon: -88.2371, name: 'Waukesha County Airport' };
@@ -3091,7 +3438,7 @@ const SYNC_COLLS = ['crops', 'fields', 'plantings', 'inputs', 'observations', 'r
 const EDIT_ACTS = new Set(['add-field', 'edit-field', 'del-field', 'edit-planting', 'del-planting', 'harvest', 'clear-harvest', 'add-crop', 'edit-crop', 'del-crop',
   'add-input', 'edit-input', 'del-input', 'add-sale', 'edit-sale', 'del-sale', 'edit-rain', 'del-rain', 'import-trial', 'add-trial', 'edit-trial', 'del-trial',
   'add-entry', 'edit-entry', 'del-entry', 'field-add-trial', 'field-trial-import', 'field-trial-new', 'field-trial-link', 'start-empty', 'reset-sample',
-  'save-farm', 'import-paste', 'save-wx-loc', 'sync-init', 'edit-formula', 'sp-mode', 'add-pp', 'edit-pp', 'del-pp']);
+  'save-farm', 'import-paste', 'save-wx-loc', 'sync-init', 'edit-formula', 'sp-mode', 'add-pp', 'edit-pp', 'del-pp', 'map-pick', 'map-draw']);
 const IN_DATA_MODAL = new Set(['save-farm', 'import-paste', 'save-wx-loc', 'sync-init', 'start-empty', 'reset-sample']);
 const plain = o => JSON.parse(JSON.stringify(o));
 const needsPasscode = () => SYNC.configured && !SYNC.canEdit && !['off', 'connecting'].includes(SYNC.mode);
@@ -3308,6 +3655,11 @@ const ACTIONS = {
   'edit-rain': id => openRainModal(id),
   'del-rain': id => withUndo('Rain reading deleted', () => { S.rainfall = S.rainfall.filter(x => x.id !== id); if (String(id).startsWith('auto-')) S.settings.hiddenAuto = [...new Set([...(S.settings.hiddenAuto || []), id])]; }),
   'toggle-view': id => { UI.tableView[id] = !UI.tableView[id]; render(); },
+  'map-pick': () => openMapPicker(),
+  'map-draw': id => openBoundaryModal(id),
+  'map-zoom': id => showFieldOnMap(id),
+  'map-color': id => { UI.mapColor = id; render(); },
+  'map-base': id => { UI.mapBase = id; render(); },
   'toggle-min': id => { UI.minimized = Object.assign({}, UI.minimized, { [id]: !(UI.minimized || {})[id] }); render(); },
   'yield-unit': id => { UI.yieldUnit = id; render(); },
   'compare-metric': id => { UI.compareMetric = id; render(); },

@@ -43,3 +43,14 @@ The Sales tab records each sale or contract: date, crop and season, field (optio
 - **+ Add a price** logs the average price per bushel (per ton for hay, per pound for cotton) on a date, or a target price. Targets show as lines across the chart, and the dashboard tells you when your sell price reaches one.
 - The rainfall log is on the Fields tab.
 
+
+## Field map
+
+The Field Map tab shows the farm's fields on a satellite picture.
+
+- **+ Map a field** (or **Draw it** next to a field) opens the picture. Find the farm by searching an address or road, by tapping **My location** while standing at the field, or by dragging and zooming. Then tap each corner of the field in order. Drag a corner to move it, tap a small dot on an edge to add a corner there, and use **Undo last corner** or **Start over** to fix mistakes.
+- The page measures the outline in acres and offers to update the field's acres to match.
+- Color the fields by **Crop**, **Yield** (harvested yield compared with the expected yield) or **Profit** per acre. Yield and profit use a blue-to-red scale with gray for about average, so the colors stand out from the crops in the picture.
+- Tap a field for its crop, acres, yield and profit, with buttons to edit the field or its shape. The Season, Crop and Field filters fade out the fields that don't match.
+- Outlines are saved with the field and shared like every other record, so editing them needs the farm passcode.
+- Satellite imagery is from Esri, the street map is from OpenStreetMap, place search uses OpenStreetMap's Nominatim, and the map itself is drawn with Leaflet. They load only when the Field Map page or a map dialog opens.
