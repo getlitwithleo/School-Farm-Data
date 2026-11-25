@@ -1,5 +1,5 @@
 {
-  "asOf": "2026-11-24T04:46:06.000Z",
+  "asOf": "2026-11-25T03:33:24.000Z",
   "source": "Nearby CBOT and ICE futures, delayed, via Yahoo Finance",
   "note": "Futures prices in dollars per unit. The page adds each crop's basis to get the local sell price.",
   "quotes": {
@@ -8,40 +8,40 @@
       "label": "Corn",
       "contract": "Mar-2027",
       "unit": "bu",
-      "price": 4.485,
-      "time": "2026-11-24T04:45:39.000Z"
+      "price": 4.5025,
+      "time": "2026-11-25T03:31:22.000Z"
     },
     "soybeans": {
       "symbol": "ZS=F",
       "label": "Soybeans",
       "contract": "Jan-2027",
       "unit": "bu",
-      "price": 12.2825,
-      "time": "2026-11-24T04:46:06.000Z"
+      "price": 12.26,
+      "time": "2026-11-25T03:32:24.000Z"
     },
     "wheat": {
       "symbol": "ZW=F",
       "label": "Chicago SRW wheat",
       "contract": "Mar-2",
       "unit": "bu",
-      "price": 5.9225,
-      "time": "2026-11-24T04:46:00.000Z"
+      "price": 5.865,
+      "time": "2026-11-25T03:33:24.000Z"
     },
     "oats": {
       "symbol": "ZO=F",
       "label": "Oats",
       "contract": "Mar-2027",
       "unit": "bu",
-      "price": 3.7725,
-      "time": "2026-11-24T04:40:43.000Z"
+      "price": 3.7525,
+      "time": "2026-11-25T02:02:43.000Z"
     },
     "cotton": {
       "symbol": "CT=F",
       "label": "Cotton No. 2",
       "contract": "",
       "unit": "lb",
-      "price": 0.8121,
-      "time": "2026-11-23T16:30:29.000Z"
+      "price": 0.8234,
+      "time": "2026-11-24T16:30:47.000Z"
     }
   }
 }
